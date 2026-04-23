@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Создать пазл-подарок</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-image: url('/static/opening.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(3px);
+            z-index: 0;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            max-width: 700px;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .container-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('/static/background.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: 0;
+        }
+        
+        .container-bg::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+        }
+        
+        .container-content {
+            position: relative;
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(2px);
+            padding: 40px;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fafafa;
+            position: relative;
+            overflow: hidden;
+            min-height: 280px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f0ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8e8ff;
+        }
+        
+        .upload-area.has-file {
+            border-color: #28a745;
+            padding: 0;
+        }
+        
+        .upload-default {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+        
+        .upload-area.has-file .upload-default {
+            display: none;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .file-info {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        .preview-full {
+            display: none;
+            position: relative;
+            width: 100%;
+            min-height: 280px;
+            background: #1a1a2e;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+        
+        .upload-area.has-file .preview-full {
+            display: block;
+        }
+        
+        .preview-full img {
+            width: 100%;
+            min-height: 280px;
+            object-fit: contain;
+            background: #1a1a2e;
+            display: block;
+        }
+        
+        .preview-full canvas {
+            width: 100%;
+            min-height: 280px;
+            object-fit: contain;
+            background: #1a1a2e;
+            display: block;
+        }
+        
+        .preview-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.4), transparent);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .file-name-badge {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: white;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .remove-file-btn {
+            background: rgba(220, 53, 69, 0.9);
+            backdrop-filter: blur(10px);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 8px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        .remove-file-btn:hover {
+            background: #dc3545;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            border-radius: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .result {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #e8f5e9;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .result h3 {
+            margin-bottom: 15px;
+            color: #2e7d32;
+        }
+        
+        .puzzle-preview {
+            margin: 15px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #2e7d32;
+            cursor: pointer;
+        }
+        
+        .puzzle-preview img {
+            width: 100%;
+            max-height: 300px;
+            object-fit: contain;
+            background: #1a1a2e;
+            display: block;
+        }
+        
+        .result a {
+            color: #2e7d32;
+            font-size: 14px;
+            word-break: break-all;
+            display: block;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .info {
+            background: #e7f3ff;
+            color: #004085;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        
+        .success-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .link-container {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid #ccc;
+            word-break: break-all;
+        }
+        
+        .copy-btn {
+            background: #2e7d32;
+            margin-top: 10px;
+            width: auto;
+            display: inline-block;
+            padding: 8px 24px;
+        }
+        
+        .preview-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+            text-align: left;
+        }
+        
+        .generated-preview-area {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .action-buttons button {
+            flex: 1;
+        }
+        
+        .secondary-btn {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        }
+        
+        .secondary-btn:hover {
+            box-shadow: 0 10px 25px rgba(108, 117, 125, 0.4);
+        }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+        }
+        
+        .modal-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+            padding: 20px;
+        }
+        
+        .modal-content img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        
+        .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            z-index: 1001;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.5);
+            border-radius: 50%;
+        }
+        
+        .close-modal:hover {
+            color: #ddd;
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .modal-caption {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: white;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px;
+            z-index: 1001;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="container-bg"></div>
+        <div class="container-content">
+            <h1>🎁 Создай пазл-подарок</h1>
+            <p class="subtitle">Загрузи билет, и получи ссылку для близкого человека</p>
+            
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-default">
+                    <div class="upload-icon">🎫</div>
+                    <div class="upload-text">Нажми или перетащи файл билета</div>
+                    <div class="file-info">PDF, PNG, JPG, JPEG до 20 МБ</div>
+                </div>
+                
+                <div class="preview-full" id="previewFull">
+                    <img id="previewImage" alt="Предпросмотр билета" style="display: none;">
+                    <canvas id="previewCanvas" style="display: none;"></canvas>
+                    <div class="preview-overlay">
+                        <div class="file-name-badge" id="fileNameBadge"></div>
+                        <button class="remove-file-btn" id="removeFileBtn">Заменить</button>
+                    </div>
+                </div>
+            </div>
+            
+            <input type="file" id="fileInput" accept=".pdf,image/*">
+            
+            <button id="processBtn" disabled>✨ Создать пазл-подарок</button>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div>Обработка... Это может занять несколько секунд</div>
+            </div>
+            
+            <div class="result" id="result">
+                <div class="success-icon">🎉</div>
+                <strong>Пазл-подарок создан!</strong>
+                
+                <div class="generated-preview-area">
+                    <div class="preview-label">📸 Предпросмотр изображения для пазла (нажми для увеличения):</div>
+                    <div class="puzzle-preview" id="puzzlePreview">
+                        <img id="generatedPreview" alt="Сгенерированное изображение">
+                    </div>
+                </div>
+                
+                <p style="margin-top: 15px;">Отправь эту ссылку тому, кому хочешь сделать подарок:</p>
+                <div class="link-container">
+                    <code id="puzzleLink">https://your-site.com/puzzle/...</code>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="copy-btn" id="copyBtn">📋 Скопировать ссылку</button>
+                    <button class="secondary-btn" id="resetBtn">🔄 Создать другой подарок</button>
+                </div>
+                
+                <p style="margin-top: 15px; font-size: 12px; color: #666;">✨ После сборки пазла получатель сможет скачать билет</p>
+            </div>
+            
+            <div class="error" id="error"></div>
+            <div class="info">
+                ℹ️ Ты загружаешь билет, а мы превращаем его в красивый пазл. Поделись ссылкой — и сюрприз готов!
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для просмотра изображений -->
+    <div id="imageModal" class="modal">
+        <span class="close-modal">&times;</span>
+        <div class="modal-content">
+            <img id="modalImage" alt="Полноэкранный просмотр">
+        </div>
+        <div class="modal-caption">Нажми на крестик или вне изображения для закрытия</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const processBtn = document.getElementById('processBtn');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+        const errorDiv = document.getElementById('error');
+        const previewFull = document.getElementById('previewFull');
+        const previewImage = document.getElementById('previewImage');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const fileNameBadge = document.getElementById('fileNameBadge');
+        const removeFileBtn = document.getElementById('removeFileBtn');
+        const puzzleLinkSpan = document.getElementById('puzzleLink');
+        const copyBtn = document.getElementById('copyBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const generatedPreview = document.getElementById('generatedPreview');
+        
+        // Modal elements
+        const modal = document.getElementById('imageModal');
+        const modalImage = document.getElementById('modalImage');
+        const closeModal = document.querySelector('.close-modal');
+        
+        let currentFile = null;
+        let currentPuzzleId = null;
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' Б';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' МБ';
+        }
+        
+        // ========== МОДАЛЬНОЕ ОКНО ==========
+        function openFullscreen(imageSrc) {
+            modalImage.src = imageSrc;
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeFullscreen() {
+            modal.style.display = 'none';
+            modalImage.src = '';
+            document.body.style.overflow = '';
+        }
+        
+        if (closeModal) {
+            closeModal.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeFullscreen();
+            });
+        }
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeFullscreen();
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.style.display === 'block') {
+                closeFullscreen();
+            }
+        });
+        
+        // ========== PDF ПРЕДПРОСМОТР ==========
+        async function renderPDFPreview(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const typedarray = new Uint8Array(e.target.result);
+                        const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                        const page = await pdf.getPage(1);
+                        
+                        const viewport = page.getViewport({ scale: 1.0 });
+                        const maxWidth = 500;
+                        const scale = maxWidth / viewport.width;
+                        const scaledViewport = page.getViewport({ scale: Math.min(scale, 1.5) });
+                        
+                        previewCanvas.width = scaledViewport.width;
+                        previewCanvas.height = scaledViewport.height;
+                        
+                        const context = previewCanvas.getContext('2d');
+                        await page.render({
+                            canvasContext: context,
+                            viewport: scaledViewport
+                        }).promise;
+                        
+                        resolve(previewCanvas.toDataURL());
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        async function showFullPreview(file) {
+            const isPdf = file.name.toLowerCase().endsWith('.pdf');
+            const fileSizeStr = formatFileSize(file.size);
+            
+            uploadArea.classList.add('has-file');
+            fileNameBadge.textContent = `${file.name} (${fileSizeStr})`;
+            
+            if (isPdf) {
+                previewImage.style.display = 'none';
+                previewCanvas.style.display = 'block';
+                previewCanvas.style.width = '100%';
+                previewCanvas.style.minHeight = '280px';
+                previewCanvas.style.objectFit = 'contain';
+                previewCanvas.style.background = '#1a1a2e';
+                
+                try {
+                    await renderPDFPreview(file);
+                } catch (error) {
+                    console.error('PDF preview error:', error);
+                    previewCanvas.style.display = 'none';
+                    previewImage.style.display = 'block';
+                    previewImage.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%232a2a3e"/%3E%3Cpath d="M35 30h30v10H35zM35 45h40v10H35zM35 60h25v10H35z" fill="%23667eea" opacity="0.8"/%3E%3Ctext x="50" y="85" text-anchor="middle" fill="%23aaa" font-size="12" font-family="monospace"%3EPDF%3C/text%3E%3C/svg%3E';
+                }
+            } else {
+                previewCanvas.style.display = 'none';
+                previewImage.style.display = 'block';
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        function resetUploadArea() {
+            uploadArea.classList.remove('has-file');
+            previewImage.src = '';
+            previewImage.style.display = 'none';
+            previewCanvas.style.display = 'none';
+            previewCanvas.width = 0;
+            previewCanvas.height = 0;
+            fileNameBadge.textContent = '';
+            processBtn.disabled = true;
+            currentFile = null;
+            result.style.display = 'none';
+            errorDiv.style.display = 'none';
+        }
+        
+        function resetToNewGift() {
+            resetUploadArea();
+            fileInput.value = '';
+            currentPuzzleId = null;
+            generatedPreview.src = '';
+        }
+        
+        removeFileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            resetToNewGift();
+        });
+        
+        resetBtn.addEventListener('click', () => {
+            resetToNewGift();
+        });
+        
+        uploadArea.addEventListener('click', (e) => {
+            if (e.target === removeFileBtn || removeFileBtn.contains(e.target)) return;
+            fileInput.click();
+        });
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        function handleFile(file) {
+            const fileName = file.name.toLowerCase();
+            const isValidImage = file.type.startsWith('image/');
+            const isValidPdf = fileName.endsWith('.pdf');
+            
+            if (!isValidImage && !isValidPdf) {
+                showError('Пожалуйста, выберите изображение или PDF файл');
+                return;
+            }
+            
+            if (file.size > 20 * 1024 * 1024) {
+                showError('Файл слишком большой (максимум 20 МБ)');
+                return;
+            }
+            
+            currentFile = file;
+            processBtn.disabled = false;
+            hideError();
+            result.style.display = 'none';
+            
+            showFullPreview(file);
+        }
+        
+        processBtn.addEventListener('click', async () => {
+            if (!currentFile) return;
+            
+            processBtn.disabled = true;
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            hideError();
+            
+            const formData = new FormData();
+            formData.append('user_image', currentFile);
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Ошибка обработки');
+                }
+                
+                const data = await response.json();
+                currentPuzzleId = data.puzzle_id;
+                
+                const fullUrl = window.location.origin + data.puzzle_url;
+                puzzleLinkSpan.textContent = fullUrl;
+                
+                const imageUrl = `/image/${data.puzzle_id}`;
+                generatedPreview.src = imageUrl;
+                
+                generatedPreview.onclick = () => openFullscreen(imageUrl);
+                
+                result.style.display = 'block';
+                
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                loading.style.display = 'none';
+                processBtn.disabled = false;
+            }
+        });
+        
+        copyBtn.addEventListener('click', () => {
+            const text = puzzleLinkSpan.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✅ Скопировано!';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 2000);
+            });
+        });
+        
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function hideError() {
+            errorDiv.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

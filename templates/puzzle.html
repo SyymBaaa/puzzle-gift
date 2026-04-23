@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>🎁 Собери пазл</title>
+    <style>
+        * {
+            user-select: none;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Georgia', 'Times New Roman', serif;
+            overflow: hidden;
+            height: 100vh;
+            background: #0a0c12;
+        }
+        
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.2s ease;
+            background-image: url('/static/opening.jpg');
+            background-size: cover;
+            background-position: center;
+            background-blend-mode: overlay;
+        }
+        
+        .overlay::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+            z-index: -1;
+        }
+        
+        .invite-text {
+            font-size: 1.3rem;
+            text-align: center;
+            max-width: 600px;
+            margin-bottom: 40px;
+            color: #ecd9b4;
+            text-shadow: 0 2px 8px black;
+            background: rgba(0, 0, 0, 0.55);
+            padding: 18px 32px;
+            border-radius: 80px;
+            backdrop-filter: blur(8px);
+            border: 1px solid #b88b4b;
+            font-style: italic;
+        }
+        
+        .compass-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: 0.3s;
+            filter: drop-shadow(0 0 8px #c9a458);
+        }
+        
+        .compass-btn svg {
+            width: 135px;
+            height: 135px;
+            transition: 0.2s;
+        }
+        
+        .compass-btn:hover svg {
+            transform: rotate(15deg) scale(1.05);
+            filter: drop-shadow(0 0 15px #f3c26b);
+        }
+        
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #0b100e;
+        }
+        
+        .puzzle-wrapper {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s ease-out;
+            cursor: grab;
+        }
+        
+        .puzzle-wrapper:active {
+            cursor: grabbing;
+        }
+        
+        canvas {
+            display: block;
+            box-shadow: 0 0 0 3px #7a5a3a, 0 20px 40px black;
+            border-radius: 20px;
+            background: #1e2a1f;
+        }
+        
+        .progress-bar-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 30px;
+            padding: 6px;
+            backdrop-filter: blur(8px);
+            border: 1px solid #dba551;
+            z-index: 45;
+        }
+        
+        .progress-bar {
+            height: 14px;
+            background: linear-gradient(90deg, #e6b85e, #f5d48a);
+            border-radius: 30px;
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 8px #ffd27a;
+        }
+        
+        .progress-text {
+            position: fixed;
+            bottom: 50px;
+            left: 20px;
+            color: #ffefcf;
+            font-size: 0.8rem;
+            text-shadow: 0 1px 2px black;
+            z-index: 45;
+            background: rgba(0,0,0,0.5);
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        
+        .music-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #1f1a10cc;
+            backdrop-filter: blur(12px);
+            border-radius: 50px;
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            z-index: 50;
+            border: 1px solid #e2b870;
+            cursor: pointer;
+            color: #ffefcf;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        
+        .music-btn:hover {
+            background: #c9862ecc;
+        }
+        
+        .win-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 200;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.8s ease;
+        }
+        
+        .win-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .win-video-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -2;
+            filter: brightness(0.4) sepia(0.2);
+        }
+        
+        .win-content {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            border-radius: 70px;
+            padding: 35px 50px;
+            text-align: center;
+            border: 2px solid #e8c28e;
+            box-shadow: 0 0 70px rgba(210, 160, 70, 0.4);
+            animation: flashWin 0.6s ease-out;
+            max-width: 650px;
+            margin: 20px;
+        }
+        
+        @keyframes flashWin {
+            0% { transform: scale(0.7); opacity: 0; }
+            50% { transform: scale(1.02); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .win-content h2 {
+            font-size: 2.5rem;
+            color: #FFF5E0;
+            text-shadow: 0 3px 8px black;
+            margin-bottom: 20px;
+        }
+        
+        .win-content p {
+            font-size: 1.3rem;
+            color: #FFF5E0;
+            margin: 12px 0;
+        }
+        
+        .ticket-info {
+            background: #0a0705aa;
+            border-radius: 40px;
+            padding: 18px 20px;
+            margin: 20px 0;
+            font-size: 1.15rem;
+            border: 1px solid #e8bc7a;
+            color: #FFF2D7;
+            line-height: 1.7;
+        }
+        
+        .win-content button {
+            background: #6a3e1a;
+            border: none;
+            padding: 14px 32px;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            color: #FFF2D7;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 10px;
+            font-weight: bold;
+            border: 1px solid #e8bc7a;
+        }
+        
+        .win-content button:hover {
+            background: #9b5e2c;
+            transform: scale(1.02);
+        }
+        
+        .violin-icon {
+            font-size: 3rem;
+            filter: drop-shadow(0 0 6px gold);
+            margin-bottom: 8px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .cursor-particle {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            font-size: 12px;
+            animation: particleFloat 0.5s ease-out forwards;
+        }
+        
+        @keyframes particleFloat {
+            0% {
+                transform: translate(0, 0) scale(0.6);
+                opacity: 0.6;
+            }
+            100% {
+                transform: translate(var(--dx, 0px), var(--dy, -30px)) scale(0);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="overlay" id="overlay">
+    <div class="invite-text">
+        Дорогая, я знаю, как ты любишь пазлы,<br>
+        поэтому я подготовил тебе задачку, чтобы получить свой подарок! 😜
+    </div>
+    <button class="compass-btn" id="startBtn">
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#2c2416" stroke="#d4af5a" stroke-width="2"/>
+            <circle cx="50" cy="50" r="38" fill="#1e1910" stroke="#b8924b" stroke-width="1.5"/>
+            <polygon points="50,15 58,45 50,85 42,45" fill="#d6a447" opacity="0.9"/>
+            <polygon points="50,15 42,45 50,85 58,45" fill="#a5722e" opacity="0.8"/>
+            <circle cx="50" cy="45" r="8" fill="#ffde9e" stroke="#8b5a2b" stroke-width="1.5"/>
+            <text x="50" y="32" text-anchor="middle" fill="#ecc87b" font-size="10" font-weight="bold">N</text>
+            <text x="50" y="70" text-anchor="middle" fill="#ecc87b" font-size="8">S</text>
+        </svg>
+    </button>
+</div>
+
+<div id="game" class="hidden">
+    <div class="game-container">
+        <div class="puzzle-wrapper" id="puzzleWrapper">
+            <canvas id="puzzleCanvas"></canvas>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="progress-text" id="progressText">Собрано 0 / 50</div>
+    </div>
+</div>
+
+<div id="winOverlay" class="win-overlay">
+    <video id="winVideo" class="win-video-bg" autoplay loop muted playsinline>
+        <source src="/static/background.mp4" type="video/mp4">
+    </video>
+    <div class="win-content">
+        <div class="violin-icon">🎻</div>
+        <h2>🎂 С днём рождения, любимая!</h2>
+        <p>Ты собрала пазл — а вот и подарок:</p>
+        <div class="ticket-info">
+            🎁 Твой билет на концерт!<br>
+            📅 С нетерпением жду этого вечера с тобой!
+        </div>
+        <button id="downloadTicketBtn">📎 Скачать билет</button>
+    </div>
+</div>
+
+<button id="musicToggle" class="music-btn hidden">🔇 Выключить музыку</button>
+
+<script>
+    // Передаём puzzle_id из шаблона
+    const PUZZLE_ID = '{{ puzzle_id }}';
+    
+    (function(){
+        const ROWS = 6;
+        const COLS = 9;
+        
+        let pieces = [];
+        let selectedPiece = null;
+        let dragOffsetX = 0, dragOffsetY = 0;
+        
+        let canvas = document.getElementById('puzzleCanvas');
+        let ctx = canvas.getContext('2d');
+        
+        let img = new Image();
+        img.src = `/image/${PUZZLE_ID}`;
+        
+        let gameStarted = false;
+        let winShown = false;
+        
+        let currentPieceW, currentPieceH;
+        let boardOffsetX, boardOffsetY, boardW, boardH;
+        let scale = 1;
+        let panX = 0, panY = 0;
+        let wrapper = document.getElementById('puzzleWrapper');
+        let isDraggingWrapper = false;
+        let wrapperDragStart = {x:0,y:0};
+        
+        let audio = new Audio("/static/music.mp3");
+        audio.loop = true;
+        audio.volume = 0.35;
+        
+        const overlay = document.getElementById('overlay');
+        const gameDiv = document.getElementById('game');
+        const winOverlay = document.getElementById('winOverlay');
+        const startBtn = document.getElementById('startBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const musicToggle = document.getElementById('musicToggle');
+        let audioEnabled = true;
+        
+        function createParticle(x, y) {
+            const particle = document.createElement('div');
+            particle.className = 'cursor-particle';
+            const icons = ['✨', '·', '•', '✧', '⋆', '✦', '⁕', '∘'];
+            particle.innerHTML = icons[Math.floor(Math.random() * icons.length)];
+            const dx = (Math.random() - 0.5) * 40;
+            const dy = -20 - Math.random() * 20;
+            particle.style.left = (x - 5) + 'px';
+            particle.style.top = (y - 5) + 'px';
+            particle.style.setProperty('--dx', dx + 'px');
+            particle.style.setProperty('--dy', dy + 'px');
+            const colors = ['#ffd27a', '#ffefcf', '#e8c28e', '#ffde9e'];
+            particle.style.color = colors[Math.floor(Math.random() * colors.length)];
+            document.body.appendChild(particle);
+            setTimeout(() => {
+                if (particle && particle.remove) particle.remove();
+            }, 500);
+        }
+        
+        let lastParticleTime = 0;
+        document.addEventListener('mousemove', (e) => {
+            const now = Date.now();
+            if (now - lastParticleTime > 150 && Math.random() < 0.3) {
+                createParticle(e.clientX, e.clientY);
+                lastParticleTime = now;
+            }
+        });
+        
+        function updateProgress() {
+            const fixedCount = pieces.filter(p => p.fixed === true).length;
+            const total = ROWS * COLS;
+            const percent = (fixedCount / total) * 100;
+            if(progressBar) progressBar.style.width = `${percent}%`;
+            if(progressText) progressText.innerHTML = `Собрано ${fixedCount} / ${total}`;
+            checkWin();
+        }
+        
+        function animateSnap(piece, targetX, targetY, callback) {
+            const startX = piece.x;
+            const startY = piece.y;
+            const duration = 150;
+            const startTime = performance.now();
+            
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(1, elapsed / duration);
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                piece.x = startX + (targetX - startX) * easeProgress;
+                piece.y = startY + (targetY - startY) * easeProgress;
+                draw();
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    piece.x = targetX;
+                    piece.y = targetY;
+                    if (callback) callback();
+                    draw();
+                    updateProgress();
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+        
+        function getRandomPositionOutside(w, h, existingPieces = []) {
+            const positions = [];
+            const stepX = w + 18;
+            const stepY = h + 18;
+            
+            for(let x = 50; x < canvas.width - w - 50; x += stepX) {
+                for(let y = 25; y < boardOffsetY - h - 25; y += stepY) {
+                    positions.push({x, y});
+                }
+            }
+            for(let x = 50; x < canvas.width - w - 50; x += stepX) {
+                for(let y = boardOffsetY + boardH + 25; y < canvas.height - h - 25; y += stepY) {
+                    positions.push({x, y});
+                }
+            }
+            for(let y = boardOffsetY; y < boardOffsetY + boardH; y += stepY) {
+                for(let x = 25; x < boardOffsetX - w - 25; x += stepX) {
+                    positions.push({x, y});
+                }
+            }
+            for(let y = boardOffsetY; y < boardOffsetY + boardH; y += stepY) {
+                for(let x = boardOffsetX + boardW + 25; x < canvas.width - w - 25; x += stepX) {
+                    positions.push({x, y});
+                }
+            }
+            
+            for(let i = positions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [positions[i], positions[j]] = [positions[j], positions[i]];
+            }
+            
+            for(let pos of positions) {
+                let overlapping = false;
+                for(let p of existingPieces) {
+                    if(Math.abs(p.x - pos.x) < w + 18 && Math.abs(p.y - pos.y) < h + 18) {
+                        overlapping = true;
+                        break;
+                    }
+                }
+                if(!overlapping) return pos;
+            }
+            return {
+                x: boardOffsetX + boardW + 50 + Math.random() * 200,
+                y: boardOffsetY + Math.random() * (boardH - h)
+            };
+        }
+        
+        function initPuzzle(){
+            const maxW = window.innerWidth - 80;
+            const maxH = window.innerHeight - 80;
+            const ratio = img.width / img.height;
+            
+            boardW = maxW * 0.95;
+            boardH = boardW / ratio;
+            if(boardH > maxH * 0.85){
+                boardH = maxH * 0.85;
+                boardW = boardH * ratio;
+            }
+            
+            const padding = Math.max(280, Math.min(400, boardW * 0.45));
+            canvas.width = boardW + padding * 2;
+            canvas.height = boardH + padding * 2;
+            boardOffsetX = padding + (canvas.width - 2*padding - boardW) / 2;
+            boardOffsetY = padding + (canvas.height - 2*padding - boardH) / 2;
+            currentPieceW = boardW / COLS;
+            currentPieceH = boardH / ROWS;
+            
+            pieces = [];
+            const tempPieces = [];
+            
+            for(let r=0; r<ROWS; r++){
+                for(let c=0; c<COLS; c++){
+                    const pos = getRandomPositionOutside(currentPieceW, currentPieceH, tempPieces);
+                    const piece = {
+                        row:r, col:c,
+                        sx:(c/COLS)*img.width,
+                        sy:(r/ROWS)*img.height,
+                        sw:img.width/COLS,
+                        sh:img.height/ROWS,
+                        correctX:boardOffsetX + c*currentPieceW,
+                        correctY:boardOffsetY + r*currentPieceH,
+                        x:pos.x, y:pos.y,
+                        w:currentPieceW, h:currentPieceH,
+                        group:null, fixed:false
+                    };
+                    pieces.push(piece);
+                    tempPieces.push(piece);
+                }
+            }
+            updateProgress();
+            draw();
+        }
+        
+        function trySnap(piece){
+            const snapDist = 65;
+            if(piece.fixed) return false;
+            
+            for(let other of pieces){
+                if(other === piece) continue;
+                if(other.fixed) continue;
+                
+                if(other.row === piece.row && other.col === piece.col+1){
+                    if(Math.abs(piece.x + piece.w - other.x) < snapDist && Math.abs(piece.y - other.y) < snapDist){
+                        animateSnap(piece, other.x - piece.w, other.y, () => mergeGroups(piece, other));
+                        return true;
+                    }
+                }
+                if(other.row === piece.row && other.col === piece.col-1){
+                    if(Math.abs(piece.x - (other.x + other.w)) < snapDist && Math.abs(piece.y - other.y) < snapDist){
+                        animateSnap(piece, other.x + other.w, other.y, () => mergeGroups(piece, other));
+                        return true;
+                    }
+                }
+                if(other.col === piece.col && other.row === piece.row+1){
+                    if(Math.abs(piece.y + piece.h - other.y) < snapDist && Math.abs(piece.x - other.x) < snapDist){
+                        animateSnap(piece, other.x, other.y - piece.h, () => mergeGroups(piece, other));
+                        return true;
+                    }
+                }
+                if(other.col === piece.col && other.row === piece.row-1){
+                    if(Math.abs(piece.y - (other.y + other.h)) < snapDist && Math.abs(piece.x - other.x) < snapDist){
+                        animateSnap(piece, other.x, other.y + other.h, () => mergeGroups(piece, other));
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function mergeGroups(a,b){
+            const g1 = a.group || [a];
+            const g2 = b.group || [b];
+            const merged = [...new Set([...g1, ...g2])];
+            const allAtCorrectPosition = merged.every(p => {
+                return Math.abs(p.x - p.correctX) < 5 && Math.abs(p.y - p.correctY) < 5;
+            });
+            if(allAtCorrectPosition) {
+                merged.forEach(p => { p.fixed = true; p.group = merged; });
+                updateProgress();
+            } else {
+                merged.forEach(p => p.group = merged);
+            }
+        }
+        
+        function trySnapToBoard(piece){
+            const snapDistance = 50;
+            if(piece.fixed) return false;
+            const group = piece.group || [piece];
+            let allNearCorrect = true;
+            group.forEach(p => {
+                if(Math.hypot(p.x - p.correctX, p.y - p.correctY) >= snapDistance) allNearCorrect = false;
+            });
+            if(allNearCorrect){
+                let completed = 0;
+                group.forEach(p => {
+                    animateSnap(p, p.correctX, p.correctY, () => {
+                        completed++;
+                        if(completed === group.length) {
+                            group.forEach(piece => { piece.fixed = true; });
+                            updateProgress();
+                            draw();
+                        }
+                    });
+                });
+                return true;
+            }
+            return false;
+        }
+        
+        function draw(){
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            ctx.fillStyle="#1a2418";
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+            
+            ctx.strokeStyle="rgba(255,255,255,0.05)";
+            ctx.lineWidth=1;
+            for(let i = 0; i < canvas.width; i += 100){
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+            
+            ctx.strokeStyle="rgba(255,255,255,0.6)";
+            ctx.lineWidth=4;
+            ctx.strokeRect(boardOffsetX,boardOffsetY,boardW,boardH);
+            ctx.fillStyle = "rgba(255,215,0,0.1)";
+            ctx.fillRect(boardOffsetX,boardOffsetY,boardW,boardH);
+            
+            pieces.forEach(p=>{
+                const isSelected = (p === selectedPiece && !p.fixed);
+                const scaleHover = isSelected ? 1.08 : 1;
+                ctx.save();
+                let drawX = p.x, drawY = p.y, drawW = p.w, drawH = p.h;
+                if (scaleHover !== 1) {
+                    const offsetX = (p.w * (scaleHover - 1)) / 2;
+                    const offsetY = (p.h * (scaleHover - 1)) / 2;
+                    drawX = p.x - offsetX;
+                    drawY = p.y - offsetY;
+                    drawW = p.w * scaleHover;
+                    drawH = p.h * scaleHover;
+                    ctx.translate(drawX + drawW/2, drawY + drawH/2);
+                    ctx.scale(scaleHover, scaleHover);
+                    ctx.translate(-drawX - drawW/2, -drawY - drawH/2);
+                }
+                if (isSelected) {
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = "rgba(255, 215, 0, 0.6)";
+                } else {
+                    ctx.shadowBlur = 4;
+                    ctx.shadowColor = "rgba(0,0,0,0.3)";
+                }
+                ctx.drawImage(img, p.sx, p.sy, p.sw, p.sh, drawX, drawY, drawW, drawH);
+                ctx.shadowBlur = 0;
+                if (isSelected) {
+                    ctx.strokeStyle = "#ffd27a";
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(drawX, drawY, drawW, drawH);
+                } else if(p.fixed){
+                    ctx.strokeStyle="#4caf50";
+                    ctx.lineWidth=3;
+                    ctx.strokeRect(drawX, drawY, drawW, drawH);
+                }
+                if (!p.fixed) {
+                    const d = Math.hypot(p.x - p.correctX, p.y - p.correctY);
+                    if(d < 85){
+                        ctx.strokeStyle="#ffd27a";
+                        ctx.lineWidth=3;
+                        ctx.setLineDash([8, 6]);
+                        ctx.strokeRect(p.correctX, p.correctY, p.w, p.h);
+                        ctx.setLineDash([]);
+                    }
+                }
+                ctx.restore();
+            });
+        }
+        
+        function checkWin(){
+            const allPlaced = pieces.length > 0 && pieces.every(p => p.fixed === true);
+            if(allPlaced && gameStarted && !winShown){
+                winShown = true;
+                setTimeout(() => {
+                    winOverlay.classList.remove("hidden");
+                    winOverlay.classList.add("active");
+                    if(audio && audioEnabled) audio.pause();
+                }, 500);
+            }
+        }
+        
+        function getMouse(e){
+            const rect = canvas.getBoundingClientRect();
+            return { x:(e.clientX-rect.left)*(canvas.width/rect.width), y:(e.clientY-rect.top)*(canvas.height/rect.height) };
+        }
+        
+        function onMouseDown(e){
+            if(!gameStarted) return;
+            const m = getMouse(e);
+            for(let i=pieces.length-1;i>=0;i--){
+                const p = pieces[i];
+                if(p.fixed) continue;
+                let checkX = p.x, checkY = p.y, checkW = p.w, checkH = p.h;
+                if (p === selectedPiece) {
+                    const scaleHover = 1.08;
+                    const offsetX = (p.w * (scaleHover - 1)) / 2;
+                    const offsetY = (p.h * (scaleHover - 1)) / 2;
+                    checkX = p.x - offsetX;
+                    checkY = p.y - offsetY;
+                    checkW = p.w * scaleHover;
+                    checkH = p.h * scaleHover;
+                }
+                if(m.x>=checkX && m.x<=checkX+checkW && m.y>=checkY && m.y<=checkY+checkH){
+                    selectedPiece = p;
+                    const group = p.group || [p];
+                    const firstPiece = group[0];
+                    dragOffsetX = m.x - firstPiece.x;
+                    dragOffsetY = m.y - firstPiece.y;
+                    return;
+                }
+            }
+            isDraggingWrapper = true;
+            wrapperDragStart.x = e.clientX - panX;
+            wrapperDragStart.y = e.clientY - panY;
+        }
+        
+        function onMouseMove(e){
+            if(selectedPiece){
+                if(selectedPiece.fixed) { selectedPiece = null; return; }
+                const m = getMouse(e);
+                const group = selectedPiece.group || [selectedPiece];
+                const firstPiece = group[0];
+                const newX = m.x - dragOffsetX;
+                const newY = m.y - dragOffsetY;
+                const dx = newX - firstPiece.x;
+                const dy = newY - firstPiece.y;
+                group.forEach(p => { if(!p.fixed) { p.x += dx; p.y += dy; } });
+                draw();
+                return;
+            }
+            if(isDraggingWrapper){
+                panX = e.clientX - wrapperDragStart.x;
+                panY = e.clientY - wrapperDragStart.y;
+                wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
+            }
+        }
+        
+        function onMouseUp(){
+            if(selectedPiece){
+                if(!selectedPiece.fixed) {
+                    const group = selectedPiece.group || [selectedPiece];
+                    let snappedToBoard = false;
+                    for(let p of group){
+                        if(!p.fixed && trySnapToBoard(p)){ snappedToBoard = true; break; }
+                    }
+                    if(!snappedToBoard){
+                        group.forEach(p => { if(!p.fixed) trySnap(p); });
+                    }
+                }
+                selectedPiece = null;
+                draw();
+            }
+            isDraggingWrapper = false;
+        }
+        
+        function onWheel(e){
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            scale = Math.min(Math.max(0.5, scale + delta), 2);
+            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
+        }
+        
+        function toggleMusic() {
+            if(audioEnabled) {
+                audio.pause();
+                audioEnabled = false;
+                musicToggle.innerHTML = "🔇 Включить музыку";
+            } else {
+                audio.play().catch(()=>{});
+                audioEnabled = true;
+                musicToggle.innerHTML = "🔇 Выключить музыку";
+            }
+        }
+        
+        function startGame(){
+            initPuzzle();
+            gameStarted = true;
+            winShown = false;
+            overlay.classList.add("hidden");
+            gameDiv.classList.remove("hidden");
+            musicToggle.classList.remove("hidden");
+            if(audioEnabled) audio.play().catch(()=>{});
+        }
+        
+        function downloadTicket() {
+            window.location.href = `/download/${PUZZLE_ID}`;
+        }
+        
+        startBtn.onclick = ()=>{
+            if(img.complete) startGame();
+            else img.onload = startGame;
+        };
+        
+        document.getElementById('downloadTicketBtn').onclick = downloadTicket;
+        musicToggle.onclick = toggleMusic;
+        
+        canvas.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('wheel', onWheel, { passive:false });
+    })();
+</script>
+</body>
+</html>
