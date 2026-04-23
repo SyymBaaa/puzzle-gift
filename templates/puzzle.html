@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>🎁 Собери пазл</title>
     <style>
         * {
@@ -9,6 +10,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
         
         body {
@@ -16,6 +18,7 @@
             overflow: hidden;
             height: 100vh;
             background: #0a0c12;
+            touch-action: none; /* Отключает скролл и зум при касаниях внутри игры */
         }
         
         .overlay {
@@ -52,6 +55,7 @@
             font-size: 1.3rem;
             text-align: center;
             max-width: 600px;
+            margin: 20px;
             margin-bottom: 40px;
             color: #ecd9b4;
             text-shadow: 0 2px 8px black;
@@ -82,6 +86,10 @@
             filter: drop-shadow(0 0 15px #f3c26b);
         }
         
+        .compass-btn:active svg {
+            transform: scale(0.96);
+        }
+        
         .game-container {
             position: relative;
             width: 100vw;
@@ -108,6 +116,11 @@
             box-shadow: 0 0 0 3px #7a5a3a, 0 20px 40px black;
             border-radius: 20px;
             background: #1e2a1f;
+            cursor: grab;
+        }
+        
+        canvas:active {
+            cursor: grabbing;
         }
         
         .progress-bar-container {
@@ -160,6 +173,7 @@
             color: #ffefcf;
             font-weight: bold;
             transition: 0.2s;
+            touch-action: manipulation;
         }
         
         .music-btn:hover {
@@ -211,8 +225,8 @@
         }
         
         @keyframes flashWin {
-            0% { transform: scale(0.7); opacity: 0; }
-            50% { transform: scale(1.02); opacity: 1; }
+            0% { transform: scale(0.7); opacity: 0; box-shadow: 0 0 0 0 #ffdd99; }
+            50% { transform: scale(1.02); opacity: 1; box-shadow: 0 0 0 20px rgba(255, 200, 100, 0); }
             100% { transform: scale(1); opacity: 1; }
         }
         
@@ -221,11 +235,13 @@
             color: #FFF5E0;
             text-shadow: 0 3px 8px black;
             margin-bottom: 20px;
+            font-family: 'Georgia', serif;
         }
         
         .win-content p {
             font-size: 1.3rem;
             color: #FFF5E0;
+            text-shadow: 0 2px 6px black;
             margin: 12px 0;
         }
         
@@ -237,6 +253,7 @@
             font-size: 1.15rem;
             border: 1px solid #e8bc7a;
             color: #FFF2D7;
+            text-shadow: 0 1px 4px black;
             line-height: 1.7;
         }
         
@@ -252,6 +269,7 @@
             margin-top: 10px;
             font-weight: bold;
             border: 1px solid #e8bc7a;
+            touch-action: manipulation;
         }
         
         .win-content button:hover {
@@ -269,11 +287,13 @@
             display: none !important;
         }
         
+        /* Анимация курсора - деликатная, работает и на десктопе */
         .cursor-particle {
             position: fixed;
             pointer-events: none;
             z-index: 9999;
             font-size: 12px;
+            filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.4));
             animation: particleFloat 0.5s ease-out forwards;
         }
         
@@ -285,6 +305,13 @@
             100% {
                 transform: translate(var(--dx, 0px), var(--dy, -30px)) scale(0);
                 opacity: 0;
+            }
+        }
+        
+        /* Для мобильных устройств убираем партиклы (чтобы не тормозили) */
+        @media (max-width: 768px) {
+            .cursor-particle {
+                display: none;
             }
         }
     </style>
@@ -340,7 +367,7 @@
 <button id="musicToggle" class="music-btn hidden">🔇 Выключить музыку</button>
 
 <script>
-    // Передаём puzzle_id из шаблона
+    // Передаём puzzle_id из шаблона (заменится на сервере)
     const PUZZLE_ID = '{{ puzzle_id }}';
     
     (function(){
@@ -381,6 +408,7 @@
         const musicToggle = document.getElementById('musicToggle');
         let audioEnabled = true;
         
+        // Партиклы только для десктопа (мышь)
         function createParticle(x, y) {
             const particle = document.createElement('div');
             particle.className = 'cursor-particle';
@@ -402,6 +430,7 @@
         
         let lastParticleTime = 0;
         document.addEventListener('mousemove', (e) => {
+            if (!gameStarted) return;
             const now = Date.now();
             if (now - lastParticleTime > 150 && Math.random() < 0.3) {
                 createParticle(e.clientX, e.clientY);
@@ -697,17 +726,22 @@
             }
         }
         
-        function getMouse(e){
+        // Универсальная функция получения координат (мышь или тач)
+        function getCanvasCoords(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            return { x:(e.clientX-rect.left)*(canvas.width/rect.width), y:(e.clientY-rect.top)*(canvas.height/rect.height) };
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
         }
         
-        function onMouseDown(e){
-            if(!gameStarted) return;
-            const m = getMouse(e);
-            for(let i=pieces.length-1;i>=0;i--){
+        function getPieceAt(m) {
+            // Увеличенная зона касания +10px для мобильных
+            const hitTolerance = 10;
+            for(let i = pieces.length-1; i >= 0; i--) {
                 const p = pieces[i];
                 if(p.fixed) continue;
+                
                 let checkX = p.x, checkY = p.y, checkW = p.w, checkH = p.h;
                 if (p === selectedPiece) {
                     const scaleHover = 1.08;
@@ -718,31 +752,53 @@
                     checkW = p.w * scaleHover;
                     checkH = p.h * scaleHover;
                 }
-                if(m.x>=checkX && m.x<=checkX+checkW && m.y>=checkY && m.y<=checkY+checkH){
-                    selectedPiece = p;
-                    const group = p.group || [p];
-                    const firstPiece = group[0];
-                    dragOffsetX = m.x - firstPiece.x;
-                    dragOffsetY = m.y - firstPiece.y;
-                    return;
+                if (m.x >= checkX - hitTolerance && m.x <= checkX + checkW + hitTolerance &&
+                    m.y >= checkY - hitTolerance && m.y <= checkY + checkH + hitTolerance) {
+                    return p;
                 }
+            }
+            return null;
+        }
+        
+        // Mouse events
+        function onMouseDown(e) {
+            e.preventDefault();
+            if(!gameStarted) return;
+            const m = getCanvasCoords(e.clientX, e.clientY);
+            const piece = getPieceAt(m);
+            if(piece) {
+                selectedPiece = piece;
+                const group = piece.group || [piece];
+                const firstPiece = group[0];
+                dragOffsetX = m.x - firstPiece.x;
+                dragOffsetY = m.y - firstPiece.y;
+                return;
             }
             isDraggingWrapper = true;
             wrapperDragStart.x = e.clientX - panX;
             wrapperDragStart.y = e.clientY - panY;
         }
         
-        function onMouseMove(e){
+        function onMouseMove(e) {
+            if(!gameStarted) return;
             if(selectedPiece){
-                if(selectedPiece.fixed) { selectedPiece = null; return; }
-                const m = getMouse(e);
+                if(selectedPiece.fixed) {
+                    selectedPiece = null;
+                    return;
+                }
+                const m = getCanvasCoords(e.clientX, e.clientY);
                 const group = selectedPiece.group || [selectedPiece];
                 const firstPiece = group[0];
                 const newX = m.x - dragOffsetX;
                 const newY = m.y - dragOffsetY;
                 const dx = newX - firstPiece.x;
                 const dy = newY - firstPiece.y;
-                group.forEach(p => { if(!p.fixed) { p.x += dx; p.y += dy; } });
+                group.forEach(p => {
+                    if(!p.fixed) {
+                        p.x += dx;
+                        p.y += dy;
+                    }
+                });
                 draw();
                 return;
             }
@@ -753,7 +809,8 @@
             }
         }
         
-        function onMouseUp(){
+        function onMouseUp(e) {
+            if(!gameStarted) return;
             if(selectedPiece){
                 if(!selectedPiece.fixed) {
                     const group = selectedPiece.group || [selectedPiece];
@@ -771,7 +828,80 @@
             isDraggingWrapper = false;
         }
         
-        function onWheel(e){
+        // Touch events
+        function onTouchStart(e) {
+            e.preventDefault();
+            if(!gameStarted) return;
+            const touch = e.touches[0];
+            const m = getCanvasCoords(touch.clientX, touch.clientY);
+            const piece = getPieceAt(m);
+            if(piece) {
+                selectedPiece = piece;
+                const group = piece.group || [piece];
+                const firstPiece = group[0];
+                dragOffsetX = m.x - firstPiece.x;
+                dragOffsetY = m.y - firstPiece.y;
+                return;
+            }
+            isDraggingWrapper = true;
+            wrapperDragStart.x = touch.clientX - panX;
+            wrapperDragStart.y = touch.clientY - panY;
+        }
+        
+        function onTouchMove(e) {
+            e.preventDefault();
+            if(!gameStarted) return;
+            if(selectedPiece){
+                if(selectedPiece.fixed) {
+                    selectedPiece = null;
+                    return;
+                }
+                const touch = e.touches[0];
+                const m = getCanvasCoords(touch.clientX, touch.clientY);
+                const group = selectedPiece.group || [selectedPiece];
+                const firstPiece = group[0];
+                const newX = m.x - dragOffsetX;
+                const newY = m.y - dragOffsetY;
+                const dx = newX - firstPiece.x;
+                const dy = newY - firstPiece.y;
+                group.forEach(p => {
+                    if(!p.fixed) {
+                        p.x += dx;
+                        p.y += dy;
+                    }
+                });
+                draw();
+                return;
+            }
+            if(isDraggingWrapper){
+                const touch = e.touches[0];
+                panX = touch.clientX - wrapperDragStart.x;
+                panY = touch.clientY - wrapperDragStart.y;
+                wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
+            }
+        }
+        
+        function onTouchEnd(e) {
+            e.preventDefault();
+            if(!gameStarted) return;
+            if(selectedPiece){
+                if(!selectedPiece.fixed) {
+                    const group = selectedPiece.group || [selectedPiece];
+                    let snappedToBoard = false;
+                    for(let p of group){
+                        if(!p.fixed && trySnapToBoard(p)){ snappedToBoard = true; break; }
+                    }
+                    if(!snappedToBoard){
+                        group.forEach(p => { if(!p.fixed) trySnap(p); });
+                    }
+                }
+                selectedPiece = null;
+                draw();
+            }
+            isDraggingWrapper = false;
+        }
+        
+        function onWheel(e) {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
             scale = Math.min(Math.max(0.5, scale + delta), 2);
@@ -796,27 +926,4 @@
             winShown = false;
             overlay.classList.add("hidden");
             gameDiv.classList.remove("hidden");
-            musicToggle.classList.remove("hidden");
-            if(audioEnabled) audio.play().catch(()=>{});
-        }
-        
-        function downloadTicket() {
-            window.location.href = `/download/${PUZZLE_ID}`;
-        }
-        
-        startBtn.onclick = ()=>{
-            if(img.complete) startGame();
-            else img.onload = startGame;
-        };
-        
-        document.getElementById('downloadTicketBtn').onclick = downloadTicket;
-        musicToggle.onclick = toggleMusic;
-        
-        canvas.addEventListener('mousedown', onMouseDown);
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-        window.addEventListener('wheel', onWheel, { passive:false });
-    })();
-</script>
-</body>
-</html>
+            musicToggle.classList.remove("hidden
