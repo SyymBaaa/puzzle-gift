@@ -18,7 +18,7 @@
             overflow: hidden;
             height: 100vh;
             background: #0a0c12;
-            touch-action: none; /* Отключает скролл и зум при касаниях внутри игры */
+            touch-action: none;
         }
         
         .overlay {
@@ -225,8 +225,8 @@
         }
         
         @keyframes flashWin {
-            0% { transform: scale(0.7); opacity: 0; box-shadow: 0 0 0 0 #ffdd99; }
-            50% { transform: scale(1.02); opacity: 1; box-shadow: 0 0 0 20px rgba(255, 200, 100, 0); }
+            0% { transform: scale(0.7); opacity: 0; }
+            50% { transform: scale(1.02); opacity: 1; }
             100% { transform: scale(1); opacity: 1; }
         }
         
@@ -235,13 +235,11 @@
             color: #FFF5E0;
             text-shadow: 0 3px 8px black;
             margin-bottom: 20px;
-            font-family: 'Georgia', serif;
         }
         
         .win-content p {
             font-size: 1.3rem;
             color: #FFF5E0;
-            text-shadow: 0 2px 6px black;
             margin: 12px 0;
         }
         
@@ -253,7 +251,6 @@
             font-size: 1.15rem;
             border: 1px solid #e8bc7a;
             color: #FFF2D7;
-            text-shadow: 0 1px 4px black;
             line-height: 1.7;
         }
         
@@ -287,28 +284,6 @@
             display: none !important;
         }
         
-        /* Анимация курсора - деликатная, работает и на десктопе */
-        .cursor-particle {
-            position: fixed;
-            pointer-events: none;
-            z-index: 9999;
-            font-size: 12px;
-            filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.4));
-            animation: particleFloat 0.5s ease-out forwards;
-        }
-        
-        @keyframes particleFloat {
-            0% {
-                transform: translate(0, 0) scale(0.6);
-                opacity: 0.6;
-            }
-            100% {
-                transform: translate(var(--dx, 0px), var(--dy, -30px)) scale(0);
-                opacity: 0;
-            }
-        }
-        
-        /* Для мобильных устройств убираем партиклы (чтобы не тормозили) */
         @media (max-width: 768px) {
             .cursor-particle {
                 display: none;
@@ -367,10 +342,12 @@
 <button id="musicToggle" class="music-btn hidden">🔇 Выключить музыку</button>
 
 <script>
-    // Передаём puzzle_id из шаблона (заменится на сервере)
-    const PUZZLE_ID = '{{ puzzle_id }}';
-    
     (function(){
+        console.log("🔧 Puzzle script started");
+        
+        const PUZZLE_ID = '{{ puzzle_id }}';
+        console.log("🆔 Puzzle ID:", PUZZLE_ID);
+        
         const ROWS = 6;
         const COLS = 9;
         
@@ -382,10 +359,13 @@
         let ctx = canvas.getContext('2d');
         
         let img = new Image();
+        img.crossOrigin = "Anonymous";
         img.src = `/image/${PUZZLE_ID}`;
+        console.log("🖼️ Loading image from:", img.src);
         
         let gameStarted = false;
         let winShown = false;
+        let imgLoaded = false;
         
         let currentPieceW, currentPieceH;
         let boardOffsetX, boardOffsetY, boardW, boardH;
@@ -407,36 +387,6 @@
         const progressText = document.getElementById('progressText');
         const musicToggle = document.getElementById('musicToggle');
         let audioEnabled = true;
-        
-        // Партиклы только для десктопа (мышь)
-        function createParticle(x, y) {
-            const particle = document.createElement('div');
-            particle.className = 'cursor-particle';
-            const icons = ['✨', '·', '•', '✧', '⋆', '✦', '⁕', '∘'];
-            particle.innerHTML = icons[Math.floor(Math.random() * icons.length)];
-            const dx = (Math.random() - 0.5) * 40;
-            const dy = -20 - Math.random() * 20;
-            particle.style.left = (x - 5) + 'px';
-            particle.style.top = (y - 5) + 'px';
-            particle.style.setProperty('--dx', dx + 'px');
-            particle.style.setProperty('--dy', dy + 'px');
-            const colors = ['#ffd27a', '#ffefcf', '#e8c28e', '#ffde9e'];
-            particle.style.color = colors[Math.floor(Math.random() * colors.length)];
-            document.body.appendChild(particle);
-            setTimeout(() => {
-                if (particle && particle.remove) particle.remove();
-            }, 500);
-        }
-        
-        let lastParticleTime = 0;
-        document.addEventListener('mousemove', (e) => {
-            if (!gameStarted) return;
-            const now = Date.now();
-            if (now - lastParticleTime > 150 && Math.random() < 0.3) {
-                createParticle(e.clientX, e.clientY);
-                lastParticleTime = now;
-            }
-        });
         
         function updateProgress() {
             const fixedCount = pieces.filter(p => p.fixed === true).length;
@@ -521,6 +471,7 @@
         }
         
         function initPuzzle(){
+            console.log("🧩 Initializing puzzle");
             const maxW = window.innerWidth - 80;
             const maxH = window.innerHeight - 80;
             const ratio = img.width / img.height;
@@ -562,6 +513,7 @@
                     tempPieces.push(piece);
                 }
             }
+            console.log(`🧩 Created ${pieces.length} pieces`);
             updateProgress();
             draw();
         }
@@ -726,7 +678,6 @@
             }
         }
         
-        // Универсальная функция получения координат (мышь или тач)
         function getCanvasCoords(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
             return {
@@ -736,7 +687,6 @@
         }
         
         function getPieceAt(m) {
-            // Увеличенная зона касания +10px для мобильных
             const hitTolerance = 10;
             for(let i = pieces.length-1; i >= 0; i--) {
                 const p = pieces[i];
@@ -760,7 +710,6 @@
             return null;
         }
         
-        // Mouse events
         function onMouseDown(e) {
             e.preventDefault();
             if(!gameStarted) return;
@@ -828,7 +777,6 @@
             isDraggingWrapper = false;
         }
         
-        // Touch events
         function onTouchStart(e) {
             e.preventDefault();
             if(!gameStarted) return;
@@ -920,10 +868,72 @@
             }
         }
         
-        function startGame(){
+        function startGame() {
+            console.log("🎮 startGame called, imgLoaded:", imgLoaded, "gameStarted:", gameStarted);
+            if (!imgLoaded) {
+                console.log("⏳ Waiting for image to load...");
+                return;
+            }
+            if (gameStarted) return;
+            
             initPuzzle();
             gameStarted = true;
             winShown = false;
             overlay.classList.add("hidden");
             gameDiv.classList.remove("hidden");
-            musicToggle.classList.remove("hidden
+            musicToggle.classList.remove("hidden");
+            if(audioEnabled) audio.play().catch(e => console.log("Audio play failed:", e));
+        }
+        
+        function downloadTicket() {
+            window.location.href = `/download/${PUZZLE_ID}`;
+        }
+        
+        img.onload = function() {
+            console.log("✅ Image loaded successfully, size:", img.width, "x", img.height);
+            imgLoaded = true;
+            // Если игра уже запущена через startBtn, но картинка загрузилась позже — запускаем
+            if (!gameStarted) {
+                console.log("🎯 Image loaded, waiting for user to start");
+            }
+        };
+        
+        img.onerror = function(e) {
+            console.error("❌ Failed to load image:", img.src, e);
+            alert("Ошибка загрузки изображения для пазла. Пожалуйста, сообщите отправителю.");
+        };
+        
+        startBtn.onclick = function(e) {
+            e.preventDefault();
+            console.log("🔘 Start button clicked");
+            startGame();
+        };
+        
+        startBtn.ontouchstart = function(e) {
+            e.preventDefault();
+            console.log("🔘 Start button touched");
+            startGame();
+        };
+        
+        document.getElementById('downloadTicketBtn').onclick = function(e) {
+            e.preventDefault();
+            downloadTicket();
+        };
+        
+        musicToggle.onclick = toggleMusic;
+        
+        canvas.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('wheel', onWheel, { passive: false });
+        
+        canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+        canvas.addEventListener('touchend', onTouchEnd);
+        canvas.addEventListener('touchcancel', onTouchEnd);
+        
+        console.log("🎯 Puzzle script ready, waiting for start");
+    })();
+</script>
+</body>
+</html>
