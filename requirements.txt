@@ -7,5 +7,5 @@ jinja2==3.1.2
 aiofiles==23.2.1
 pypdfium2==4.28.0
 pillow==10.1.0
-svgpath2mpl==0.1.0
-matplotlib==3.7.2
+svgpath2mpl
+matplotlib
