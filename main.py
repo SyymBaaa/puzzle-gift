@@ -2,14 +2,14 @@ import cv2
 import numpy as np
 import os
 import uuid
-import shutil
+import json
+import re
 from datetime import datetime, timedelta
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import RedirectResponse
 import config
 
 try:
@@ -18,6 +18,15 @@ try:
 except ImportError:
     PDF_SUPPORT = False
     print("⚠️ pypdfium2 не установлен, PDF не поддерживается")
+
+# Импорты для работы с SVG
+try:
+    from svgpath2mpl import parse_path
+    from matplotlib.path import Path
+    SVG_SUPPORT = True
+except ImportError:
+    SVG_SUPPORT = False
+    print("⚠️ svgpath2mpl не установлен, пазлы будут прямоугольными")
 
 app = FastAPI(title="Puzzle Gift Service")
 
@@ -41,8 +50,8 @@ app.mount("/puzzle/static", StaticFiles(directory=config.STATIC_DIR), name="puzz
 
 templates = Jinja2Templates(directory="templates")
 
-# Хранилище метаданных (в реальном проекте используйте БД)
-puzzles_db = {}  # {uuid: {"original_path": str, "image_path": str, "created_at": datetime}}
+# Хранилище метаданных
+puzzles_db = {}
 
 
 # ========== ФУНКЦИИ ОБРАБОТКИ ИЗОБРАЖЕНИЙ ==========
@@ -130,6 +139,7 @@ def overlay_layer(base_img, top_img):
 
 
 def process_layers(user_img):
+    """Собирает цельное изображение из слоёв и билета пользователя"""
     render_order = config.get_render_order()
     current_image = None
 
@@ -167,23 +177,142 @@ def process_layers(user_img):
     return current_image
 
 
-def generate_puzzle_image(user_file_bytes, filename):
-    """Генерирует итоговое изображение для пазла"""
-    ext = os.path.splitext(filename)[1].lower()
+# ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ФИГУРНЫМИ ПАЗЛАМИ ==========
 
+def parse_svg_paths(svg_path):
+    """Извлекает все path из SVG файла"""
+    with open(svg_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # Ищем все path
+    pattern = r'<path\s+d="([^"]+)"'
+    paths = re.findall(pattern, content)
+    print(f"📦 Найдено {len(paths)} кусочков в SVG")
+    return paths
+
+
+def slice_image_by_svg_paths(image_path, svg_path, output_dir):
+    """Разрезает изображение по всем path из SVG на фигурные кусочки"""
+    if not SVG_SUPPORT:
+        print("⚠️ SVG поддержка не установлена, нарезка невозможна")
+        return []
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+    if img is None:
+        raise ValueError(f"Не удалось загрузить изображение: {image_path}")
+    
+    h, w = img.shape[:2]
+    print(f"🖼️ Размер изображения для нарезки: {w}x{h}")
+    
+    paths = parse_svg_paths(svg_path)
+    pieces_data = []
+    
+    for i, path_str in enumerate(paths):
+        try:
+            path = parse_path(path_str)
+            
+            # Собираем полигоны из path
+            polygons = []
+            current = []
+            
+            for points, code in path.iter_segments():
+                if code == Path.MOVETO:
+                    if current:
+                        polygons.append(np.array(current, dtype=np.int32))
+                    current = [points]
+                elif code in (Path.LINETO, Path.CURVE3, Path.CURVE4):
+                    current.append(points)
+                elif code == Path.CLOSEPOLY:
+                    if current:
+                        current.append(current[0])
+                        polygons.append(np.array(current, dtype=np.int32))
+                    current = []
+            
+            if current:
+                polygons.append(np.array(current, dtype=np.int32))
+            
+            # Создаём маску
+            mask = np.zeros((h, w), dtype=np.uint8)
+            for poly in polygons:
+                if len(poly) > 2:
+                    cv2.fillPoly(mask, [poly], 255)
+            
+            if np.sum(mask) == 0:
+                continue
+            
+            # Вырезаем по маске
+            piece = cv2.bitwise_and(img, img, mask=mask)
+            
+            # Обрезаем пустое пространство
+            coords = cv2.findNonZero(mask)
+            if coords is not None:
+                x, y, pw, ph = cv2.boundingRect(coords)
+                piece_cropped = piece[y:y+ph, x:x+pw]
+                
+                piece_path = os.path.join(output_dir, f'piece_{i:03d}.png')
+                cv2.imwrite(piece_path, piece_cropped)
+                
+                pieces_data.append({
+                    'id': i,
+                    'path': piece_path,
+                    'correct_x': x + pw // 2,
+                    'correct_y': y + ph // 2,
+                    'width': pw,
+                    'height': ph,
+                    'bbox_x': x,
+                    'bbox_y': y
+                })
+                
+                if (i + 1) % 10 == 0:
+                    print(f"   Обработано {i+1}/{len(paths)}")
+                    
+        except Exception as e:
+            print(f"⚠️ Ошибка в кусочке {i}: {e}")
+            continue
+    
+    print(f"🎉 Создано {len(pieces_data)} фигурных кусочков")
+    return pieces_data
+
+
+def generate_puzzle_image(user_file_bytes, filename, puzzle_id):
+    """Генерирует цельное изображение + нарезает фигурные пазлы"""
+    ext = os.path.splitext(filename)[1].lower()
+    
     if ext == '.pdf':
         if not PDF_SUPPORT:
             raise ValueError("PDF не поддерживается")
         user_img = pdf_to_image(user_file_bytes)
     else:
         user_img = image_from_bytes(user_file_bytes)
-
+    
+    # 1. Собираем цельное изображение из слоёв
     result = process_layers(user_img)
-
     if result is None:
         raise ValueError("Не удалось обработать изображения")
-
-    return result
+    
+    # Сохраняем цельное изображение
+    full_image_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_full.jpg")
+    cv2.imwrite(full_image_path, result)
+    print(f"✅ Цельное изображение сохранено: {full_image_path}")
+    
+    # 2. Нарезаем на фигурные пазлы по SVG
+    svg_path = os.path.join(config.STATIC_DIR, "puzzle_shapes.svg")
+    pieces_dir = os.path.join(config.GENERATED_DIR, f"pieces_{puzzle_id}")
+    
+    pieces_data = []
+    if os.path.exists(svg_path) and SVG_SUPPORT:
+        pieces_data = slice_image_by_svg_paths(full_image_path, svg_path, pieces_dir)
+        
+        # Сохраняем информацию о кусочках в JSON
+        pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
+        with open(pieces_info_path, 'w') as f:
+            json.dump(pieces_data, f)
+    else:
+        print("⚠️ SVG не найден или нет поддержки, пазлы будут прямоугольными")
+    
+    return full_image_path, pieces_data
 
 
 # ========== ОЧИСТКА СТАРЫХ ФАЙЛОВ ==========
@@ -199,10 +328,13 @@ def cleanup_old_files():
     for pid in to_delete:
         data = puzzles_db.pop(pid)
         try:
-            if os.path.exists(data["original_path"]):
+            if os.path.exists(data.get("original_path", "")):
                 os.remove(data["original_path"])
-            if os.path.exists(data["image_path"]):
+            if os.path.exists(data.get("image_path", "")):
                 os.remove(data["image_path"])
+            if os.path.exists(data.get("pieces_dir", "")):
+                import shutil
+                shutil.rmtree(data["pieces_dir"])
         except Exception as e:
             print(f"Ошибка удаления {pid}: {e}")
 
@@ -242,16 +374,16 @@ async def upload_ticket(user_image: UploadFile = File(...)):
         f.write(contents)
 
     try:
-        # Генерируем изображение для пазла
-        result_img = generate_puzzle_image(contents, filename)
-        image_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}.jpg")
-        cv2.imwrite(image_path, result_img)
+        # Генерируем цельное изображение и нарезаем пазлы
+        full_image_path, pieces_data = generate_puzzle_image(contents, filename, puzzle_id)
 
         # Сохраняем в БД
         puzzles_db[puzzle_id] = {
             "original_path": original_path,
             "original_ext": ext,
-            "image_path": image_path,
+            "image_path": full_image_path,
+            "pieces_dir": os.path.join(config.GENERATED_DIR, f"pieces_{puzzle_id}") if pieces_data else None,
+            "pieces_count": len(pieces_data),
             "created_at": datetime.now()
         }
 
@@ -261,7 +393,7 @@ async def upload_ticket(user_image: UploadFile = File(...)):
             "success": True,
             "puzzle_id": puzzle_id,
             "puzzle_url": puzzle_url,
-            "full_url": f"https://your-site.com{puzzle_url}"  # замените на реальный домен
+            "full_url": f"https://your-site.com{puzzle_url}"
         })
 
     except Exception as e:
@@ -285,7 +417,7 @@ async def puzzle_page(request: Request, puzzle_id: str):
 
 @app.get("/image/{puzzle_id}")
 async def get_puzzle_image(puzzle_id: str):
-    """Отдаёт сгенерированное изображение для пазла"""
+    """Отдаёт сгенерированное цельное изображение для превью"""
     if puzzle_id not in puzzles_db:
         raise HTTPException(404, "Изображение не найдено")
 
@@ -294,6 +426,38 @@ async def get_puzzle_image(puzzle_id: str):
         raise HTTPException(404, "Файл изображения удалён")
 
     return FileResponse(image_path, media_type="image/jpeg", filename=f"puzzle_{puzzle_id}.jpg")
+
+
+@app.get("/piece/{puzzle_id}/{piece_id}")
+async def get_piece(puzzle_id: str, piece_id: int):
+    """Отдаёт отдельный фигурный кусочек пазла"""
+    if puzzle_id not in puzzles_db:
+        raise HTTPException(404, "Пазл не найден")
+    
+    pieces_dir = puzzles_db[puzzle_id].get("pieces_dir")
+    if not pieces_dir or not os.path.exists(pieces_dir):
+        # Если нет фигурных кусочков, пробуем вернуть прямоугольный (заглушка)
+        raise HTTPException(404, "Фигурные кусочки не найдены")
+    
+    piece_path = os.path.join(pieces_dir, f"piece_{piece_id:03d}.png")
+    if not os.path.exists(piece_path):
+        raise HTTPException(404, "Кусочек не найден")
+    
+    return FileResponse(piece_path, media_type="image/png")
+
+
+@app.get("/pieces-info/{puzzle_id}")
+async def get_pieces_info(puzzle_id: str):
+    """Возвращает информацию о кусочках (позиции, размеры)"""
+    if puzzle_id not in puzzles_db:
+        raise HTTPException(404, "Пазл не найден")
+    
+    pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
+    if os.path.exists(pieces_info_path):
+        with open(pieces_info_path, 'r') as f:
+            return JSONResponse(json.load(f))
+    
+    return JSONResponse([])
 
 
 @app.get("/download/{puzzle_id}")
