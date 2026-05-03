@@ -26,9 +26,10 @@ try:
     SVG_SUPPORT = True
 except ImportError:
     SVG_SUPPORT = False
-    print("⚠️ svgpath2mpl не установлен, пазлы будут прямоугольными")
+    print("⚠️ svgpath2mpl не установлен, пазлы не будут работать")
+    print("   Установите: pip install svgpath2mpl matplotlib")
 
-app = FastAPI(title="Puzzle Gift Service")
+app = FastAPI(title="Puzzle Gift Service - Фигурные пазлы")
 
 app.add_middleware(
     CORSMiddleware,
@@ -179,65 +180,142 @@ def process_layers(user_img):
 
 # ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ФИГУРНЫМИ ПАЗЛАМИ ==========
 
-def parse_svg_paths(svg_path):
-    """Извлекает все path из SVG файла"""
-    with open(svg_path, 'r', encoding='utf-8') as f:
+def parse_svg_paths_from_file(file_path):
+    """Извлекает все path из текстового файла с SVG путями"""
+    with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    # Ищем все path
+    # Ищем все path (формат: <path d="..."/> или <path d="...">)
     pattern = r'<path\s+d="([^"]+)"'
     paths = re.findall(pattern, content)
-    print(f"📦 Найдено {len(paths)} кусочков в SVG")
+    print(f"📦 Найдено {len(paths)} кусочков в {file_path}")
     return paths
 
 
-def slice_image_by_svg_paths(image_path, svg_path, output_dir):
-    """Разрезает изображение по всем path из SVG на фигурные кусочки"""
+def get_svg_bounds(paths_list):
+    """Вычисляет bounding box всех путей SVG (для нормализации)"""
+    from matplotlib.path import Path as MPath
+    
+    all_points = []
+    for path_str in paths_list:
+        try:
+            path = parse_path(path_str)
+            for points, code in path.iter_segments():
+                if code != MPath.CLOSEPOLY:
+                    all_points.append(points)
+        except:
+            continue
+    
+    if not all_points:
+        return (0, 0, 4096, 4096)
+    
+    all_points = np.array(all_points)
+    min_x, min_y = all_points.min(axis=0)
+    max_x, max_y = all_points.max(axis=0)
+    
+    return (min_x, min_y, max_x, max_y)
+
+
+def slice_image_by_svg_paths(image_path, txt_path, output_dir):
+    """
+    Разрезает изображение по всем path из текстового файла на фигурные кусочки
+    с правильным масштабированием координат
+    """
     if not SVG_SUPPORT:
-        print("⚠️ SVG поддержка не установлена, нарезка невозможна")
-        return []
+        raise Exception("❌ SVG поддержка не установлена. Установите: pip install svgpath2mpl matplotlib")
     
     os.makedirs(output_dir, exist_ok=True)
     
+    # Загружаем изображение
     img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if img is None:
-        raise ValueError(f"Не удалось загрузить изображение: {image_path}")
+        raise ValueError(f"❌ Не удалось загрузить изображение: {image_path}")
+    
+    # Если нет альфа-канала, добавляем
+    if img.shape[2] == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
     
     h, w = img.shape[:2]
     print(f"🖼️ Размер изображения для нарезки: {w}x{h}")
     
-    paths = parse_svg_paths(svg_path)
+    # Парсим пути
+    paths = parse_svg_paths_from_file(txt_path)
+    
+    # Определяем оригинальные границы SVG (по путям)
+    svg_min_x, svg_min_y, svg_max_x, svg_max_y = get_svg_bounds(paths)
+    svg_width = svg_max_x - svg_min_x
+    svg_height = svg_max_y - svg_min_y
+    
+    print(f"📐 SVG bounds: ({svg_min_x:.1f}, {svg_min_y:.1f}) -> ({svg_max_x:.1f}, {svg_max_y:.1f})")
+    print(f"📐 SVG размер: {svg_width:.1f} x {svg_height:.1f}")
+    
+    # Вычисляем масштаб для вписывания в изображение
+    scale = min(w / svg_width, h / svg_height) * 0.95  # 95% чтобы были отступы
+    
+    print(f"🔍 Масштаб: {scale:.3f}")
+    
     pieces_data = []
     
     for i, path_str in enumerate(paths):
         try:
+            # Парсим SVG path в полигоны
             path = parse_path(path_str)
             
-            # Собираем полигоны из path
-            polygons = []
-            current = []
+            # Собираем полигоны из path и сразу трансформируем координаты
+            all_polygons = []
             
             for points, code in path.iter_segments():
                 if code == Path.MOVETO:
-                    if current:
-                        polygons.append(np.array(current, dtype=np.int32))
-                    current = [points]
+                    # Начинаем новый полигон
+                    all_polygons.append([points])
                 elif code in (Path.LINETO, Path.CURVE3, Path.CURVE4):
-                    current.append(points)
+                    if all_polygons:
+                        all_polygons[-1].append(points)
                 elif code == Path.CLOSEPOLY:
-                    if current:
-                        current.append(current[0])
-                        polygons.append(np.array(current, dtype=np.int32))
-                    current = []
+                    if all_polygons and all_polygons[-1]:
+                        all_polygons[-1].append(all_polygons[-1][0])
             
-            if current:
-                polygons.append(np.array(current, dtype=np.int32))
+            if not all_polygons:
+                print(f"⚠️ Кусочек {i} не содержит полигонов, пропускаем")
+                continue
             
-            # Создаём маску
+            # Трансформируем все полигоны в координаты изображения
+            transformed_polygons = []
+            for poly in all_polygons:
+                if len(poly) < 3:
+                    continue
+                
+                # Конвертируем в numpy массив
+                poly_array = np.array(poly, dtype=np.float32)
+                
+                # Переносим в начало координат (относительно SVG bounds)
+                poly_array[:, 0] -= svg_min_x
+                poly_array[:, 1] -= svg_min_y
+                
+                # Масштабируем
+                poly_array[:, 0] *= scale
+                poly_array[:, 1] *= scale
+                
+                # Центрируем в изображении
+                offset_x = (w - svg_width * scale) / 2
+                offset_y = (h - svg_height * scale) / 2
+                poly_array[:, 0] += offset_x
+                poly_array[:, 1] += offset_y
+                
+                # Округляем до int
+                transformed_polygons.append(poly_array.astype(np.int32))
+            
+            if not transformed_polygons:
+                continue
+            
+            # Создаём маску из всех полигонов
             mask = np.zeros((h, w), dtype=np.uint8)
-            for poly in polygons:
+            for poly in transformed_polygons:
                 if len(poly) > 2:
                     cv2.fillPoly(mask, [poly], 255)
+            
+            # Небольшое размытие маски для антиалиасинга
+            mask = cv2.GaussianBlur(mask, (3, 3), 0)
             
             if np.sum(mask) == 0:
                 continue
@@ -250,6 +328,11 @@ def slice_image_by_svg_paths(image_path, svg_path, output_dir):
             if coords is not None:
                 x, y, pw, ph = cv2.boundingRect(coords)
                 piece_cropped = piece[y:y+ph, x:x+pw]
+                mask_cropped = mask[y:y+ph, x:x+pw]
+                
+                # Делаем прозрачные области действительно прозрачными
+                if piece_cropped.shape[2] == 4:
+                    piece_cropped[:, :, 3] = mask_cropped
                 
                 piece_path = os.path.join(output_dir, f'piece_{i:03d}.png')
                 cv2.imwrite(piece_path, piece_cropped)
@@ -293,24 +376,29 @@ def generate_puzzle_image(user_file_bytes, filename, puzzle_id):
         raise ValueError("Не удалось обработать изображения")
     
     # Сохраняем цельное изображение
-    full_image_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_full.jpg")
+    full_image_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_full.png")
     cv2.imwrite(full_image_path, result)
     print(f"✅ Цельное изображение сохранено: {full_image_path}")
     
-    # 2. Нарезаем на фигурные пазлы по SVG
-    svg_path = os.path.join(config.STATIC_DIR, "puzzle_shapes.svg")
+    # 2. Нарезаем на фигурные пазлы по SVG путям
+    txt_path = os.path.join(config.STATIC_DIR, "puzzle_shapes.txt")
     pieces_dir = os.path.join(config.GENERATED_DIR, f"pieces_{puzzle_id}")
     
-    pieces_data = []
-    if os.path.exists(svg_path) and SVG_SUPPORT:
-        pieces_data = slice_image_by_svg_paths(full_image_path, svg_path, pieces_dir)
-        
-        # Сохраняем информацию о кусочках в JSON
-        pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
-        with open(pieces_info_path, 'w') as f:
-            json.dump(pieces_data, f)
-    else:
-        print("⚠️ SVG не найден или нет поддержки, пазлы будут прямоугольными")
+    if not os.path.exists(txt_path):
+        raise Exception(f"❌ Файл с путями не найден: {txt_path}")
+    
+    if not SVG_SUPPORT:
+        raise Exception("❌ SVG поддержка не установлена. Установите: pip install svgpath2mpl matplotlib")
+    
+    pieces_data = slice_image_by_svg_paths(full_image_path, txt_path, pieces_dir)
+    
+    if not pieces_data:
+        raise Exception("❌ Не удалось нарезать фигурные пазлы. Проверьте файл puzzle_shapes.txt")
+    
+    # Сохраняем информацию о кусочках в JSON
+    pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
+    with open(pieces_info_path, 'w') as f:
+        json.dump(pieces_data, f, indent=2)
     
     return full_image_path, pieces_data
 
@@ -335,6 +423,9 @@ def cleanup_old_files():
             if os.path.exists(data.get("pieces_dir", "")):
                 import shutil
                 shutil.rmtree(data["pieces_dir"])
+            pieces_json = os.path.join(config.GENERATED_DIR, f"{pid}_pieces.json")
+            if os.path.exists(pieces_json):
+                os.remove(pieces_json)
         except Exception as e:
             print(f"Ошибка удаления {pid}: {e}")
 
@@ -382,7 +473,7 @@ async def upload_ticket(user_image: UploadFile = File(...)):
             "original_path": original_path,
             "original_ext": ext,
             "image_path": full_image_path,
-            "pieces_dir": os.path.join(config.GENERATED_DIR, f"pieces_{puzzle_id}") if pieces_data else None,
+            "pieces_dir": os.path.join(config.GENERATED_DIR, f"pieces_{puzzle_id}"),
             "pieces_count": len(pieces_data),
             "created_at": datetime.now()
         }
@@ -425,7 +516,7 @@ async def get_puzzle_image(puzzle_id: str):
     if not os.path.exists(image_path):
         raise HTTPException(404, "Файл изображения удалён")
 
-    return FileResponse(image_path, media_type="image/jpeg", filename=f"puzzle_{puzzle_id}.jpg")
+    return FileResponse(image_path, media_type="image/png", filename=f"puzzle_{puzzle_id}.png")
 
 
 @app.get("/piece/{puzzle_id}/{piece_id}")
@@ -436,7 +527,6 @@ async def get_piece(puzzle_id: str, piece_id: int):
     
     pieces_dir = puzzles_db[puzzle_id].get("pieces_dir")
     if not pieces_dir or not os.path.exists(pieces_dir):
-        # Если нет фигурных кусочков, пробуем вернуть прямоугольный (заглушка)
         raise HTTPException(404, "Фигурные кусочки не найдены")
     
     piece_path = os.path.join(pieces_dir, f"piece_{piece_id:03d}.png")
@@ -484,6 +574,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    import os
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
