@@ -66,24 +66,19 @@
             height: 100vh;
             overflow: hidden;
             background: #0b100e;
-        }
-        
-        .puzzle-wrapper {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
             cursor: grab;
         }
         
-        .puzzle-wrapper:active {
+        .game-container:active {
             cursor: grabbing;
         }
         
         canvas {
             display: block;
-            box-shadow: 0 0 0 3px #7a5a3a, 0 20px 40px black;
-            border-radius: 20px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            box-shadow: none;
             background: #1e2a1f;
         }
         
@@ -142,6 +137,9 @@
         }
         
         .music-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 120px;
             background: #1f1a10cc;
             backdrop-filter: blur(12px);
             border-radius: 50px;
@@ -149,6 +147,7 @@
             border: 1px solid #e2b870;
             cursor: pointer;
             color: #ffefcf;
+            z-index: 50;
         }
         
         .win-overlay {
@@ -234,15 +233,6 @@
             font-size: 0.7rem;
             z-index: 45;
         }
-        
-        .snap-effect {
-            animation: snapFlash 0.2s ease-out;
-        }
-        
-        @keyframes snapFlash {
-            0% { filter: brightness(1.5); }
-            100% { filter: brightness(1); }
-        }
     </style>
 </head>
 <body>
@@ -262,21 +252,19 @@
 </div>
 
 <div id="game" class="hidden">
-    <div class="game-container">
-        <div class="puzzle-wrapper" id="puzzleWrapper">
-            <canvas id="puzzleCanvas"></canvas>
-        </div>
-        <div class="progress-bar-container">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
-        <div class="progress-text" id="progressText">Собрано 0 / 0</div>
-        <div class="controls">
-            <button class="control-btn" id="zoomOutBtn">−</button>
-            <button class="control-btn" id="zoomInBtn">+</button>
-            <button class="control-btn" id="resetViewBtn">⊙</button>
-        </div>
-        <div class="zoom-info" id="zoomInfo">100%</div>
+    <div class="game-container" id="gameContainer">
+        <canvas id="puzzleCanvas"></canvas>
     </div>
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="progress-text" id="progressText">Собрано 0 / 0</div>
+    <div class="controls">
+        <button class="control-btn" id="zoomOutBtn">−</button>
+        <button class="control-btn" id="zoomInBtn">+</button>
+        <button class="control-btn" id="resetViewBtn">⊙</button>
+    </div>
+    <div class="zoom-info" id="zoomInfo">100%</div>
 </div>
 
 <div id="winOverlay" class="win-overlay">
@@ -300,23 +288,40 @@
     const PUZZLE_ID = '{{ puzzle_id }}';
     
     (function() {
+        // Размеры мира
+        const WORLD_WIDTH = 50000;
+        const WORLD_HEIGHT = 25000;
+        const WORLD_CENTER_X = WORLD_WIDTH / 2;
+        const WORLD_CENTER_Y = WORLD_HEIGHT / 2;
+        
+        // Зона разброса кусочков (10000x5000 вокруг центра)
+        const SCATTER_ZONE_MIN_X = WORLD_CENTER_X - 5000;
+        const SCATTER_ZONE_MAX_X = WORLD_CENTER_X + 5000;
+        const SCATTER_ZONE_MIN_Y = WORLD_CENTER_Y - 2500;
+        const SCATTER_ZONE_MAX_Y = WORLD_CENTER_Y + 2500;
+        
         let pieces = [];
         let selectedPiece = null;
         let selectedGroup = [];
         let dragOffsetX = 0, dragOffsetY = 0;
-        let dragStartX = 0, dragStartY = 0;
         
         let canvas = document.getElementById('puzzleCanvas');
         let ctx = canvas.getContext('2d');
+        let container = document.getElementById('gameContainer');
         
         let gameStarted = false;
         let winShown = false;
         
-        let canvasW, canvasH;
-        let scale = 1, panX = 0, panY = 0;
-        let wrapper = document.getElementById('puzzleWrapper');
-        let isDraggingWrapper = false;
-        let wrapperDragStart = {x:0, y:0};
+        // Камера
+        let camera = {
+            x: WORLD_CENTER_X,
+            y: WORLD_CENTER_Y,
+            zoom: 1.0
+        };
+        
+        let isDraggingCamera = false;
+        let dragStart = { x: 0, y: 0 };
+        let cameraStart = { x: 0, y: 0 };
         
         let audio = new Audio("/static/music.mp3");
         audio.loop = true;
@@ -337,60 +342,58 @@
         let audioEnabled = true;
         
         function updateZoomInfo() {
-            zoomInfo.textContent = `${Math.round(scale * 100)}%`;
+            zoomInfo.textContent = `${Math.round(camera.zoom * 100)}%`;
+        }
+        
+        function applyCamera() {
+            canvas.style.transform = `translate(${-camera.x * camera.zoom + window.innerWidth/2}px, ${-camera.y * camera.zoom + window.innerHeight/2}px) scale(${camera.zoom})`;
         }
         
         function zoom(delta, centerX, centerY) {
-            const oldScale = scale;
-            scale = Math.min(Math.max(0.3, scale + delta), 3);
+            const oldZoom = camera.zoom;
+            camera.zoom = Math.min(Math.max(0.3, camera.zoom + delta), 3);
             
             if (centerX !== undefined && centerY !== undefined) {
-                const ratio = scale / oldScale;
-                panX = centerX - (centerX - panX) * ratio;
-                panY = centerY - (centerY - panY) * ratio;
+                camera.x = centerX - (centerX - camera.x) * (camera.zoom / oldZoom);
+                camera.y = centerY - (centerY - camera.y) * (camera.zoom / oldZoom);
             }
             
-            applyTransform();
+            applyCamera();
             updateZoomInfo();
         }
         
         function resetView() {
             if (!pieces.length) return;
             
-            let minPieceX = Infinity, minPieceY = Infinity;
-            let maxPieceX = -Infinity, maxPieceY = -Infinity;
+            // Находим границы всех кусочков
+            let minX = Infinity, minY = Infinity;
+            let maxX = -Infinity, maxY = -Infinity;
             
             pieces.forEach(p => {
-                minPieceX = Math.min(minPieceX, p.x, p.correctX);
-                minPieceY = Math.min(minPieceY, p.y, p.correctY);
-                maxPieceX = Math.max(maxPieceX, p.x + p.w, p.correctX + p.w);
-                maxPieceY = Math.max(maxPieceY, p.y + p.h, p.correctY + p.h);
+                minX = Math.min(minX, p.x, p.correctX);
+                minY = Math.min(minY, p.y, p.correctY);
+                maxX = Math.max(maxX, p.x + p.w, p.correctX + p.w);
+                maxY = Math.max(maxY, p.y + p.h, p.correctY + p.h);
             });
             
-            const contentW = maxPieceX - minPieceX;
-            const contentH = maxPieceY - minPieceY;
+            const contentW = maxX - minX;
+            const contentH = maxY - minY;
             const viewW = window.innerWidth * 0.8;
             const viewH = window.innerHeight * 0.8;
             
-            scale = Math.min(viewW / contentW, viewH / contentH, 1.5);
-            panX = (window.innerWidth / 2) - (minPieceX + contentW / 2) * scale;
-            panY = (window.innerHeight / 2) - (minPieceY + contentH / 2) * scale;
+            camera.zoom = Math.min(viewW / contentW, viewH / contentH, 1.2);
+            camera.x = (minX + maxX) / 2;
+            camera.y = (minY + maxY) / 2;
             
-            applyTransform();
+            applyCamera();
             updateZoomInfo();
         }
         
-        function applyTransform() {
-            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
-        }
-        
-        // Получить все кусочки в группе
         function getGroup(piece) {
             if (!piece.group) return [piece];
             return piece.group;
         }
         
-        // Объединить две группы
         function mergeGroups(pieceA, pieceB) {
             const groupA = getGroup(pieceA);
             const groupB = getGroup(pieceB);
@@ -403,27 +406,23 @@
             return merged;
         }
         
-        // Проверить, можно ли соединить два кусочка
         function trySnapPieces(pieceA, pieceB) {
-            // Если уже соединены
             if (pieceA.group === pieceB.group) return false;
+            if (pieceA.fixed || pieceB.fixed) return false;
             
-            // Получаем правильные позиции
-            const correctX = pieceA.correctX - pieceB.correctX;
-            const correctY = pieceA.correctY - pieceB.correctY;
+            // Проверяем по правильным позициям
+            const deltaCorrectX = (pieceA.correctX + pieceA.w/2) - (pieceB.correctX + pieceB.w/2);
+            const deltaCorrectY = (pieceA.correctY + pieceA.h/2) - (pieceB.correctY + pieceB.h/2);
             
-            // Текущая разница в позициях
-            const deltaX = pieceA.x - pieceB.x;
-            const deltaY = pieceA.y - pieceB.y;
+            const deltaCurrentX = (pieceA.x + pieceA.w/2) - (pieceB.x + pieceB.w/2);
+            const deltaCurrentY = (pieceA.y + pieceA.h/2) - (pieceB.y + pieceB.h/2);
             
-            const tolerance = 15; // Допуск в пикселях
+            const tolerance = 50;
             
-            // Проверяем, совпадает ли текущее положение с правильным
-            if (Math.abs(deltaX - correctX) < tolerance && Math.abs(deltaY - correctY) < tolerance) {
-                // Соединяем
-                const group = mergeGroups(pieceA, pieceB);
+            if (Math.abs(deltaCurrentX - deltaCorrectX) < tolerance && 
+                Math.abs(deltaCurrentY - deltaCorrectY) < tolerance) {
                 
-                // Выравниваем всю группу по правильным позициям
+                const group = mergeGroups(pieceA, pieceB);
                 const rootPiece = group[0];
                 const rootCorrectX = rootPiece.correctX;
                 const rootCorrectY = rootPiece.correctY;
@@ -440,18 +439,15 @@
             return false;
         }
         
-        // Проверить соединение с доской (правильной позицией)
-        function trySnapToBoard(piece) {
+        function trySnapToCorrect(piece) {
             const group = getGroup(piece);
-            
-            // Находим центральный кусок группы
             const centerPiece = group[0];
             const offsetX = centerPiece.x - centerPiece.correctX;
             const offsetY = centerPiece.y - centerPiece.correctY;
             
-            // Если группа уже близко к правильному месту
-            if (Math.abs(offsetX) < 20 && Math.abs(offsetY) < 20) {
-                // Фиксируем всю группу
+            const tolerance = 40;
+            
+            if (Math.abs(offsetX) < tolerance && Math.abs(offsetY) < tolerance) {
                 group.forEach(p => {
                     p.x = p.correctX;
                     p.y = p.correctY;
@@ -464,14 +460,12 @@
             return false;
         }
         
-        // Загрузка информации о кусочках
         async function loadPiecesInfo() {
             const response = await fetch(`/pieces-info/${PUZZLE_ID}`);
             if (!response.ok) throw new Error('Не удалось загрузить информацию о пазле');
             return await response.json();
         }
         
-        // Загрузка изображения кусочка
         function loadPieceImage(pieceId) {
             return new Promise((resolve, reject) => {
                 const img = new Image();
@@ -481,12 +475,45 @@
             });
         }
         
-        // Инициализация пазла
+        function getRandomPositionInScatterZone(piece, existingPieces) {
+            const maxAttempts = 100;
+            
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const x = SCATTER_ZONE_MIN_X + Math.random() * (SCATTER_ZONE_MAX_X - SCATTER_ZONE_MIN_X - piece.w);
+                const y = SCATTER_ZONE_MIN_Y + Math.random() * (SCATTER_ZONE_MAX_Y - SCATTER_ZONE_MIN_Y - piece.h);
+                
+                // Проверяем перекрытие с другими кусочками
+                let overlapping = false;
+                let overlapCount = 0;
+                
+                for (let existing of existingPieces) {
+                    const overlapX = Math.max(0, Math.min(x + piece.w, existing.x + existing.w) - Math.max(x, existing.x));
+                    const overlapY = Math.max(0, Math.min(y + piece.h, existing.y + existing.h) - Math.max(y, existing.y));
+                    const overlapArea = overlapX * overlapY;
+                    const pieceArea = piece.w * piece.h;
+                    
+                    if (overlapArea > 0) {
+                        overlapCount++;
+                        if (overlapArea > pieceArea * 0.3 || overlapCount > 2) {
+                            overlapping = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!overlapping) {
+                    return { x, y };
+                }
+            }
+            
+            // Если не нашли место, кладём в угол
+            return { x: SCATTER_ZONE_MIN_X + 50, y: SCATTER_ZONE_MIN_Y + 50 };
+        }
+        
         async function initPuzzle() {
             loadingSpinner.classList.remove('hidden');
             
             try {
-                console.log('🧩 Загрузка информации о пазле...');
                 const piecesInfo = await loadPiecesInfo();
                 console.log(`📦 Загружено ${piecesInfo.length} кусочков`);
                 
@@ -494,8 +521,11 @@
                     throw new Error('Нет данных о кусочках пазла');
                 }
                 
-                // Загружаем изображения всех кусочков
+                // Загружаем все кусочки и определяем правильные позиции
                 pieces = [];
+                let puzzleMinX = Infinity, puzzleMinY = Infinity;
+                let puzzleMaxX = -Infinity, puzzleMaxY = -Infinity;
+                
                 for (let i = 0; i < piecesInfo.length; i++) {
                     const info = piecesInfo[i];
                     const img = await loadPieceImage(info.id);
@@ -503,8 +533,8 @@
                     pieces.push({
                         id: info.id,
                         img: img,
-                        x: 50 + Math.random() * 600,
-                        y: 50 + Math.random() * 400,
+                        x: 0,
+                        y: 0,
                         correctX: info.correct_x,
                         correctY: info.correct_y,
                         w: info.width,
@@ -513,29 +543,50 @@
                         group: null
                     });
                     
-                    if ((i + 1) % 10 === 0) {
-                        console.log(`   Загружено ${i + 1}/${piecesInfo.length}`);
-                    }
+                    puzzleMinX = Math.min(puzzleMinX, info.correct_x);
+                    puzzleMinY = Math.min(puzzleMinY, info.correct_y);
+                    puzzleMaxX = Math.max(puzzleMaxX, info.correct_x + info.width);
+                    puzzleMaxY = Math.max(puzzleMaxY, info.correct_y + info.height);
                 }
                 
-                // Вычисляем размер canvas
-                let maxX = 0, maxY = 0;
-                pieces.forEach(p => {
-                    maxX = Math.max(maxX, p.correctX + p.w);
-                    maxY = Math.max(maxY, p.correctY + p.h);
-                });
+                // Центрируем пазл в центре мира
+                const puzzleCenterX = (puzzleMinX + puzzleMaxX) / 2;
+                const puzzleCenterY = (puzzleMinY + puzzleMaxY) / 2;
+                const offsetX = WORLD_CENTER_X - puzzleCenterX;
+                const offsetY = WORLD_CENTER_Y - puzzleCenterY;
                 
-                canvasW = Math.max(1400, maxX + 200);
-                canvasH = Math.max(1000, maxY + 200);
-                canvas.width = canvasW;
-                canvas.height = canvasH;
+                // Разбрасываем кусочки
+                const scattered = [];
+                
+                for (let i = 0; i < pieces.length; i++) {
+                    const p = pieces[i];
+                    
+                    // Смещаем правильные позиции в центр мира
+                    p.correctX += offsetX;
+                    p.correctY += offsetY;
+                    
+                    // Получаем случайную позицию в зоне разброса
+                    const pos = getRandomPositionInScatterZone(p, scattered);
+                    p.x = pos.x;
+                    p.y = pos.y;
+                    
+                    scattered.push(p);
+                    
+                    console.log(`📌 Кусочек ${i}: correct(${Math.round(p.correctX)}, ${Math.round(p.correctY)}) scatter(${Math.round(p.x)}, ${Math.round(p.y)})`);
+                }
+                
+                // Настраиваем canvas
+                canvas.width = WORLD_WIDTH;
+                canvas.height = WORLD_HEIGHT;
                 
                 console.log(`✅ Загружено ${pieces.length} кусочков`);
-                console.log(`📐 Canvas размер: ${canvasW}x${canvasH}`);
+                console.log(`🌍 Мир: ${WORLD_WIDTH}x${WORLD_HEIGHT}`);
+                console.log(`📐 Пазл в центре: (${Math.round(WORLD_CENTER_X)}, ${Math.round(WORLD_CENTER_Y)})`);
                 
                 updateProgress();
                 draw();
                 
+                // Сбрасываем камеру
                 setTimeout(() => resetView(), 100);
                 
             } catch (error) {
@@ -570,14 +621,14 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Рисуем фон
+            // Рисуем фон и сетку мира
             ctx.fillStyle = "#1a2418";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Рисуем сетку
+            // Сетка с шагом 1000 пикселей
             ctx.strokeStyle = "rgba(255,255,255,0.05)";
             ctx.lineWidth = 1;
-            for (let i = 0; i < canvas.width; i += 100) {
+            for (let i = 0; i < canvas.width; i += 1000) {
                 ctx.beginPath();
                 ctx.moveTo(i, 0);
                 ctx.lineTo(i, canvas.height);
@@ -587,6 +638,34 @@
                 ctx.lineTo(canvas.width, i);
                 ctx.stroke();
             }
+            
+            // Рисуем зону разброса (для отладки - можно убрать)
+            ctx.strokeStyle = "rgba(100, 150, 255, 0.2)";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.strokeRect(SCATTER_ZONE_MIN_X, SCATTER_ZONE_MIN_Y, 
+                          SCATTER_ZONE_MAX_X - SCATTER_ZONE_MIN_X, 
+                          SCATTER_ZONE_MAX_Y - SCATTER_ZONE_MIN_Y);
+            ctx.setLineDash([]);
+            
+            // Рисуем область сборки пазла (контур)
+            let boardMinX = Infinity, boardMinY = Infinity;
+            let boardMaxX = -Infinity, boardMaxY = -Infinity;
+            
+            pieces.forEach(p => {
+                boardMinX = Math.min(boardMinX, p.correctX);
+                boardMinY = Math.min(boardMinY, p.correctY);
+                boardMaxX = Math.max(boardMaxX, p.correctX + p.w);
+                boardMaxY = Math.max(boardMaxY, p.correctY + p.h);
+            });
+            
+            ctx.strokeStyle = "rgba(255, 215, 0, 0.3)";
+            ctx.lineWidth = 3;
+            ctx.setLineDash([15, 15]);
+            ctx.strokeRect(boardMinX - 20, boardMinY - 20, 
+                          (boardMaxX - boardMinX) + 40, 
+                          (boardMaxY - boardMinY) + 40);
+            ctx.setLineDash([]);
             
             // Рисуем все кусочки
             pieces.forEach(p => {
@@ -600,9 +679,18 @@
                 
                 ctx.drawImage(p.img, p.x, p.y, p.w, p.h);
                 
+                if (!p.fixed) {
+                    // Показываем контур правильной позиции
+                    ctx.strokeStyle = "rgba(255, 210, 90, 0.4)";
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeRect(p.correctX, p.correctY, p.w, p.h);
+                    ctx.setLineDash([]);
+                }
+                
                 if (p.fixed) {
                     ctx.strokeStyle = "#4caf50";
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = 2;
                     ctx.strokeRect(p.x, p.y, p.w, p.h);
                 }
             });
@@ -612,8 +700,8 @@
         function getCanvasCoords(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
             return {
-                x: (clientX - rect.left) * (canvas.width / rect.width),
-                y: (clientY - rect.top) * (canvas.height / rect.height)
+                x: (clientX - rect.left) / camera.zoom + camera.x - window.innerWidth/2/camera.zoom,
+                y: (clientY - rect.top) / camera.zoom + camera.y - window.innerHeight/2/camera.zoom
             };
         }
         
@@ -631,24 +719,28 @@
         function onMouseDown(e) {
             e.preventDefault();
             if (!gameStarted) return;
+            
             const coord = getCanvasCoords(e.clientX, e.clientY);
             const piece = getPieceAt(coord.x, coord.y);
+            
             if (piece && !piece.fixed) {
                 selectedPiece = piece;
                 selectedGroup = getGroup(piece);
                 dragOffsetX = coord.x - piece.x;
                 dragOffsetY = coord.y - piece.y;
-                dragStartX = piece.x;
-                dragStartY = piece.y;
             } else {
-                isDraggingWrapper = true;
-                wrapperDragStart.x = e.clientX - panX;
-                wrapperDragStart.y = e.clientY - panY;
+                isDraggingCamera = true;
+                dragStart.x = e.clientX;
+                dragStart.y = e.clientY;
+                cameraStart.x = camera.x;
+                cameraStart.y = camera.y;
+                container.style.cursor = 'grabbing';
             }
         }
         
         function onMouseMove(e) {
             if (!gameStarted) return;
+            
             if (selectedPiece && !selectedPiece.fixed) {
                 const coord = getCanvasCoords(e.clientX, e.clientY);
                 const newX = coord.x - dragOffsetX;
@@ -656,95 +748,26 @@
                 const deltaX = newX - selectedPiece.x;
                 const deltaY = newY - selectedPiece.y;
                 
-                // Перемещаем всю группу
                 selectedGroup.forEach(p => {
                     p.x += deltaX;
                     p.y += deltaY;
                 });
                 
                 draw();
-            } else if (isDraggingWrapper) {
-                panX = e.clientX - wrapperDragStart.x;
-                panY = e.clientY - wrapperDragStart.y;
-                applyTransform();
+            } else if (isDraggingCamera) {
+                const dx = e.clientX - dragStart.x;
+                const dy = e.clientY - dragStart.y;
+                camera.x = cameraStart.x - dx / camera.zoom;
+                camera.y = cameraStart.y - dy / camera.zoom;
+                applyCamera();
             }
         }
         
         function onMouseUp(e) {
             if (!gameStarted) return;
+            
             if (selectedPiece && !selectedPiece.fixed) {
-                // Сначала пробуем соединить с доской
-                let snapped = trySnapToBoard(selectedPiece);
-                
-                // Если не соединилось с доской, пробуем соединить с другими кусочками
-                if (!snapped) {
-                    for (let other of pieces) {
-                        if (other === selectedPiece) continue;
-                        if (other.fixed) continue;
-                        if (trySnapPieces(selectedPiece, other)) {
-                            snapped = true;
-                            break;
-                        }
-                    }
-                }
-                
-                selectedPiece = null;
-                selectedGroup = [];
-                draw();
-            }
-            isDraggingWrapper = false;
-        }
-        
-        function onTouchStart(e) {
-            e.preventDefault();
-            if (!gameStarted) return;
-            const touch = e.touches[0];
-            const coord = getCanvasCoords(touch.clientX, touch.clientY);
-            const piece = getPieceAt(coord.x, coord.y);
-            if (piece && !piece.fixed) {
-                selectedPiece = piece;
-                selectedGroup = getGroup(piece);
-                dragOffsetX = coord.x - piece.x;
-                dragOffsetY = coord.y - piece.y;
-                dragStartX = piece.x;
-                dragStartY = piece.y;
-            } else {
-                isDraggingWrapper = true;
-                wrapperDragStart.x = touch.clientX - panX;
-                wrapperDragStart.y = touch.clientY - panY;
-            }
-        }
-        
-        function onTouchMove(e) {
-            e.preventDefault();
-            if (!gameStarted) return;
-            if (selectedPiece && !selectedPiece.fixed) {
-                const touch = e.touches[0];
-                const coord = getCanvasCoords(touch.clientX, touch.clientY);
-                const newX = coord.x - dragOffsetX;
-                const newY = coord.y - dragOffsetY;
-                const deltaX = newX - selectedPiece.x;
-                const deltaY = newY - selectedPiece.y;
-                
-                selectedGroup.forEach(p => {
-                    p.x += deltaX;
-                    p.y += deltaY;
-                });
-                
-                draw();
-            } else if (isDraggingWrapper) {
-                const touch = e.touches[0];
-                panX = touch.clientX - wrapperDragStart.x;
-                panY = touch.clientY - wrapperDragStart.y;
-                applyTransform();
-            }
-        }
-        
-        function onTouchEnd(e) {
-            e.preventDefault();
-            if (!gameStarted) return;
-            if (selectedPiece && !selectedPiece.fixed) {
-                let snapped = trySnapToBoard(selectedPiece);
+                let snapped = trySnapToCorrect(selectedPiece);
                 
                 if (!snapped) {
                     for (let other of pieces) {
@@ -761,14 +784,18 @@
                 selectedGroup = [];
                 draw();
             }
-            isDraggingWrapper = false;
+            
+            if (isDraggingCamera) {
+                isDraggingCamera = false;
+                container.style.cursor = 'grab';
+            }
         }
         
         function onWheel(e) {
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            const rect = container.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left) / camera.zoom + camera.x - window.innerWidth/2/camera.zoom;
+            const mouseY = (e.clientY - rect.top) / camera.zoom + camera.y - window.innerHeight/2/camera.zoom;
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
             zoom(delta, mouseX, mouseY);
         }
@@ -800,6 +827,7 @@
             if (audioEnabled) audio.play().catch(() => {});
         }
         
+        // Обработчики
         startBtn.onclick = startGame;
         startBtn.ontouchstart = (e) => { e.preventDefault(); startGame(); };
         
@@ -810,15 +838,77 @@
         zoomOutBtn.onclick = () => zoom(-0.2);
         resetViewBtn.onclick = () => resetView();
         
-        canvas.addEventListener('mousedown', onMouseDown);
+        container.addEventListener('mousedown', onMouseDown);
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
-        window.addEventListener('wheel', onWheel, { passive: false });
+        container.addEventListener('wheel', onWheel, { passive: false });
         
-        canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-        canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-        canvas.addEventListener('touchend', onTouchEnd);
-        canvas.addEventListener('touchcancel', onTouchEnd);
+        // Touch events
+        container.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!gameStarted) return;
+            const touch = e.touches[0];
+            const coord = getCanvasCoords(touch.clientX, touch.clientY);
+            const piece = getPieceAt(coord.x, coord.y);
+            if (piece && !piece.fixed) {
+                selectedPiece = piece;
+                selectedGroup = getGroup(piece);
+                dragOffsetX = coord.x - piece.x;
+                dragOffsetY = coord.y - piece.y;
+            } else {
+                isDraggingCamera = true;
+                dragStart.x = touch.clientX;
+                dragStart.y = touch.clientY;
+                cameraStart.x = camera.x;
+                cameraStart.y = camera.y;
+            }
+        });
+        
+        container.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!gameStarted) return;
+            const touch = e.touches[0];
+            if (selectedPiece && !selectedPiece.fixed) {
+                const coord = getCanvasCoords(touch.clientX, touch.clientY);
+                const newX = coord.x - dragOffsetX;
+                const newY = coord.y - dragOffsetY;
+                const deltaX = newX - selectedPiece.x;
+                const deltaY = newY - selectedPiece.y;
+                selectedGroup.forEach(p => {
+                    p.x += deltaX;
+                    p.y += deltaY;
+                });
+                draw();
+            } else if (isDraggingCamera) {
+                const dx = touch.clientX - dragStart.x;
+                const dy = touch.clientY - dragStart.y;
+                camera.x = cameraStart.x - dx / camera.zoom;
+                camera.y = cameraStart.y - dy / camera.zoom;
+                applyCamera();
+            }
+        });
+        
+        container.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (!gameStarted) return;
+            if (selectedPiece && !selectedPiece.fixed) {
+                let snapped = trySnapToCorrect(selectedPiece);
+                if (!snapped) {
+                    for (let other of pieces) {
+                        if (other === selectedPiece) continue;
+                        if (other.fixed) continue;
+                        if (trySnapPieces(selectedPiece, other)) {
+                            snapped = true;
+                            break;
+                        }
+                    }
+                }
+                selectedPiece = null;
+                selectedGroup = [];
+                draw();
+            }
+            isDraggingCamera = false;
+        });
         
         console.log('🎯 Puzzle page ready, puzzle_id:', PUZZLE_ID);
     })();
