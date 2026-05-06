@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>🎁 Собери пазл</title>
+    <title>🧩 Собери пазл</title>
     <style>
         * {
             user-select: none;
@@ -14,80 +14,11 @@
         }
         
         body {
-            font-family: 'Segoe UI', 'Georgia', 'Times New Roman', serif;
+            font-family: 'Segoe UI', 'Georgia', serif;
             overflow: hidden;
             height: 100vh;
-            background: #0a0c12;
+            background: linear-gradient(135deg, #1a2a1a 0%, #0d1a0d 100%);
             touch-action: none;
-        }
-        
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            transition: opacity 1.2s ease;
-            background-image: url('/static/opening.jpg');
-            background-size: cover;
-            background-position: center;
-            background-blend-mode: overlay;
-        }
-        
-        .overlay::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(2px);
-            z-index: -1;
-        }
-        
-        .invite-text {
-            font-size: 1.3rem;
-            text-align: center;
-            max-width: 600px;
-            margin: 20px;
-            margin-bottom: 40px;
-            color: #ecd9b4;
-            text-shadow: 0 2px 8px black;
-            background: rgba(0, 0, 0, 0.55);
-            padding: 18px 32px;
-            border-radius: 80px;
-            backdrop-filter: blur(8px);
-            border: 1px solid #b88b4b;
-            font-style: italic;
-        }
-        
-        .compass-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            transition: 0.3s;
-            filter: drop-shadow(0 0 8px #c9a458);
-        }
-        
-        .compass-btn svg {
-            width: 135px;
-            height: 135px;
-            transition: 0.2s;
-        }
-        
-        .compass-btn:hover svg {
-            transform: rotate(15deg) scale(1.05);
-            filter: drop-shadow(0 0 15px #f3c26b);
-        }
-        
-        .compass-btn:active svg {
-            transform: scale(0.96);
         }
         
         .game-container {
@@ -95,7 +26,7 @@
             width: 100vw;
             height: 100vh;
             overflow: hidden;
-            background: #0b100e;
+            background: radial-gradient(circle at 50% 50%, #2a3a2a, #0a150a);
         }
         
         .puzzle-wrapper {
@@ -103,7 +34,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            transition: transform 0.1s ease-out;
+            transform-origin: center center;
             cursor: grab;
         }
         
@@ -113,8 +44,8 @@
         
         canvas {
             display: block;
-            box-shadow: 0 0 0 3px #7a5a3a, 0 20px 40px black;
-            border-radius: 20px;
+            box-shadow: 0 0 0 4px #d4a555, 0 20px 40px rgba(0,0,0,0.5);
+            border-radius: 24px;
             background: #1e2a1f;
             cursor: grab;
         }
@@ -125,21 +56,23 @@
         
         .progress-bar-container {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
+            bottom: 24px;
+            left: 24px;
+            right: 24px;
             background: rgba(0, 0, 0, 0.6);
-            border-radius: 30px;
+            border-radius: 40px;
             padding: 6px;
-            backdrop-filter: blur(8px);
+            backdrop-filter: blur(12px);
             border: 1px solid #dba551;
             z-index: 45;
+            max-width: 500px;
+            margin: 0 auto;
         }
         
         .progress-bar {
-            height: 14px;
+            height: 12px;
             background: linear-gradient(90deg, #e6b85e, #f5d48a);
-            border-radius: 30px;
+            border-radius: 40px;
             width: 0%;
             transition: width 0.3s ease;
             box-shadow: 0 0 8px #ffd27a;
@@ -147,23 +80,24 @@
         
         .progress-text {
             position: fixed;
-            bottom: 50px;
-            left: 20px;
+            bottom: 56px;
+            left: 40px;
             color: #ffefcf;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             text-shadow: 0 1px 2px black;
             z-index: 45;
             background: rgba(0,0,0,0.5);
-            padding: 4px 12px;
+            padding: 4px 14px;
             border-radius: 20px;
+            font-weight: bold;
         }
         
         .controls {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
+            bottom: 24px;
+            right: 24px;
             display: flex;
-            gap: 10px;
+            gap: 12px;
             z-index: 50;
         }
         
@@ -176,23 +110,14 @@
             cursor: pointer;
             color: #ffefcf;
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 1.1rem;
+            transition: 0.1s;
+            min-width: 48px;
         }
         
-        .music-btn {
-            position: fixed;
-            bottom: 20px;
-            right: 130px;
-            background: #1f1a10cc;
-            backdrop-filter: blur(12px);
-            border-radius: 50px;
-            padding: 10px 20px;
-            font-size: 0.9rem;
-            z-index: 50;
-            border: 1px solid #e2b870;
-            cursor: pointer;
-            color: #ffefcf;
-            font-weight: bold;
+        .control-btn:active {
+            transform: scale(0.95);
+            background: #3a2a18cc;
         }
         
         .win-overlay {
@@ -208,6 +133,8 @@
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.8s ease;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(15px);
         }
         
         .win-overlay.active {
@@ -215,27 +142,16 @@
             visibility: visible;
         }
         
-        .win-video-bg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: -2;
-            filter: brightness(0.4) sepia(0.2);
-        }
-        
         .win-content {
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
             backdrop-filter: blur(20px);
-            border-radius: 70px;
+            border-radius: 60px;
             padding: 35px 50px;
             text-align: center;
             border: 2px solid #e8c28e;
             box-shadow: 0 0 70px rgba(210, 160, 70, 0.4);
-            animation: flashWin 0.6s ease-out;
-            max-width: 650px;
+            animation: flashWin 0.5s ease-out;
+            max-width: 600px;
             margin: 20px;
         }
         
@@ -246,27 +162,16 @@
         }
         
         .win-content h2 {
-            font-size: 2.5rem;
+            font-size: 2.2rem;
             color: #FFF5E0;
             text-shadow: 0 3px 8px black;
             margin-bottom: 20px;
         }
         
         .win-content p {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             color: #FFF5E0;
             margin: 12px 0;
-        }
-        
-        .ticket-info {
-            background: #0a0705aa;
-            border-radius: 40px;
-            padding: 18px 20px;
-            margin: 20px 0;
-            font-size: 1.15rem;
-            border: 1px solid #e8bc7a;
-            color: #FFF2D7;
-            line-height: 1.7;
         }
         
         .win-content button {
@@ -278,7 +183,7 @@
             color: #FFF2D7;
             cursor: pointer;
             transition: 0.2s;
-            margin-top: 10px;
+            margin-top: 20px;
             font-weight: bold;
             border: 1px solid #e8bc7a;
         }
@@ -286,12 +191,6 @@
         .win-content button:hover {
             background: #9b5e2c;
             transform: scale(1.02);
-        }
-        
-        .violin-icon {
-            font-size: 3rem;
-            filter: drop-shadow(0 0 6px gold);
-            margin-bottom: 8px;
         }
         
         .hidden {
@@ -305,78 +204,76 @@
             transform: translate(-50%, -50%);
             color: white;
             font-size: 1.2rem;
-            background: rgba(0,0,0,0.7);
-            padding: 20px;
-            border-radius: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 20px 30px;
+            border-radius: 50px;
             z-index: 300;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid #dba551;
+        }
+        
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #dba551;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
         
         @media (max-width: 768px) {
-            .cursor-particle {
-                display: none;
-            }
             .controls {
                 bottom: 80px;
+            }
+            .progress-text {
+                bottom: 72px;
+            }
+            .win-content {
+                padding: 25px 30px;
+            }
+            .win-content h2 {
+                font-size: 1.6rem;
             }
         }
     </style>
 </head>
 <body>
 
-<div class="overlay" id="overlay">
-    <div class="invite-text">
-        Дорогая, я знаю, как ты любишь пазлы,<br>
-        поэтому я подготовил тебе задачку, чтобы получить свой подарок! 😜
+<div id="game" class="game-container">
+    <div class="puzzle-wrapper" id="puzzleWrapper">
+        <canvas id="puzzleCanvas"></canvas>
     </div>
-    <button class="compass-btn" id="startBtn">
-        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="45" fill="#2c2416" stroke="#d4af5a" stroke-width="2"/>
-            <circle cx="50" cy="50" r="38" fill="#1e1910" stroke="#b8924b" stroke-width="1.5"/>
-            <polygon points="50,15 58,45 50,85 42,45" fill="#d6a447" opacity="0.9"/>
-            <polygon points="50,15 42,45 50,85 58,45" fill="#a5722e" opacity="0.8"/>
-            <circle cx="50" cy="45" r="8" fill="#ffde9e" stroke="#8b5a2b" stroke-width="1.5"/>
-            <text x="50" y="32" text-anchor="middle" fill="#ecc87b" font-size="10" font-weight="bold">N</text>
-            <text x="50" y="70" text-anchor="middle" fill="#ecc87b" font-size="8">S</text>
-        </svg>
-    </button>
-</div>
-
-<div id="game" class="hidden">
-    <div class="game-container">
-        <div class="puzzle-wrapper" id="puzzleWrapper">
-            <canvas id="puzzleCanvas"></canvas>
-        </div>
-        <div class="progress-bar-container">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
-        <div class="progress-text" id="progressText">Собрано 0 / 0</div>
-        <div class="controls">
-            <button class="control-btn" id="zoomOutBtn">−</button>
-            <button class="control-btn" id="zoomInBtn">+</button>
-            <button class="control-btn" id="resetViewBtn">⊙</button>
-        </div>
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="progress-text" id="progressText">🧩 Собрано 0 / 0</div>
+    <div class="controls">
+        <button class="control-btn" id="zoomOutBtn">−</button>
+        <button class="control-btn" id="zoomInBtn">+</button>
+        <button class="control-btn" id="resetViewBtn">⊙</button>
     </div>
 </div>
 
 <div id="winOverlay" class="win-overlay">
-    <video id="winVideo" class="win-video-bg" autoplay loop muted playsinline>
-        <source src="/static/background.mp4" type="video/mp4">
-    </video>
     <div class="win-content">
-        <div class="violin-icon">🎻</div>
-        <h2>🎂 С днём рождения, любимая!</h2>
-        <p>Ты собрала пазл — а вот и подарок:</p>
-        <div class="ticket-info">
-            🎁 Твой билет на концерт!<br>
-            📅 С нетерпением жду этого вечера с тобой!
-        </div>
-        <button id="downloadTicketBtn">📎 Скачать билет</button>
+        <h2>🎉 Поздравляю! 🎉</h2>
+        <p>Ты собрала весь пазл!</p>
+        <p>✨ Молодец! ✨</p>
+        <button id="closeWinBtn">Закрыть</button>
     </div>
 </div>
 
-<button id="musicToggle" class="music-btn hidden">🔇 Выключить музыку</button>
-
-<div id="loadingSpinner" class="loading-spinner hidden">Загрузка пазла... 🧩</div>
+<div id="loadingSpinner" class="loading-spinner hidden">
+    <div class="spinner"></div>
+    <span>Загрузка пазла...</span>
+</div>
 
 <script>
     const PUZZLE_ID = '{{ puzzle_id }}';
@@ -384,147 +281,294 @@
     (function(){
         let pieces = [];
         let selectedPiece = null;
+        let selectedGroupPieces = []; // Все кусочки в группе выбранного
         let dragOffsetX = 0, dragOffsetY = 0;
+        let dragStartGroupPos = { x: 0, y: 0 };
         
         let canvas = document.getElementById('puzzleCanvas');
         let ctx = canvas.getContext('2d');
         
-        let gameStarted = false;
+        let gameReady = false;
         let winShown = false;
         
         let scale = 1;
         let panX = 0, panY = 0;
         let wrapper = document.getElementById('puzzleWrapper');
         let isDraggingWrapper = false;
-        let wrapperDragStart = {x:0, y:0};
+        let wrapperDragStart = {x: 0, y: 0};
         
-        let audio = new Audio("/static/music.mp3");
-        audio.loop = true;
-        audio.volume = 0.35;
-        
-        const overlay = document.getElementById('overlay');
         const gameDiv = document.getElementById('game');
         const winOverlay = document.getElementById('winOverlay');
-        const startBtn = document.getElementById('startBtn');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
-        const musicToggle = document.getElementById('musicToggle');
         const loadingSpinner = document.getElementById('loadingSpinner');
         const zoomInBtn = document.getElementById('zoomInBtn');
         const zoomOutBtn = document.getElementById('zoomOutBtn');
         const resetViewBtn = document.getElementById('resetViewBtn');
-        let audioEnabled = true;
         
-        // Глобальный масштаб для кусочков
         let globalScale = 1;
+        
+        // Размеры области сборки
+        let boardRect = { x: 0, y: 0, w: 0, h: 0 };
+        
+        // Константы для магнитов
+        const SNAP_DISTANCE = 55;
+        const GROUP_SNAP_DISTANCE = 65;
         
         function updateProgress() {
             const fixedCount = pieces.filter(p => p.fixed === true).length;
             const total = pieces.length;
-            const percent = (fixedCount / total) * 100;
+            const percent = total > 0 ? (fixedCount / total) * 100 : 0;
             if(progressBar) progressBar.style.width = `${percent}%`;
-            if(progressText) progressText.innerHTML = `Собрано ${fixedCount} / ${total}`;
+            if(progressText) progressText.innerHTML = `🧩 Собрано ${fixedCount} / ${total}`;
             checkWin();
         }
         
-        function animateSnap(piece, targetX, targetY, callback) {
-            const startX = piece.x;
-            const startY = piece.y;
-            const duration = 150;
+        // Найти группу кусочка
+        function getGroup(piece) {
+            return piece.group || [piece];
+        }
+        
+        // Проверить, находится ли группа рядом с правильными позициями
+        function isGroupNearCorrect(group) {
+            if (!group.length) return false;
+            
+            let totalDist = 0;
+            for (let p of group) {
+                const dx = p.x - p.correctX;
+                const dy = p.y - p.correctY;
+                totalDist += Math.hypot(dx, dy);
+            }
+            const avgDist = totalDist / group.length;
+            return avgDist < SNAP_DISTANCE;
+        }
+        
+        // Примагнитить группу к правильным позициям
+        function snapGroupToCorrect(group, callback) {
+            if (!group.length || group[0].fixed) return false;
+            
+            // Вычисляем смещение
+            let totalDx = 0, totalDy = 0;
+            for (let p of group) {
+                totalDx += p.correctX - p.x;
+                totalDy += p.correctY - p.y;
+            }
+            const offsetX = totalDx / group.length;
+            const offsetY = totalDy / group.length;
+            
+            // Если смещение небольшое - примагничиваем
+            if (Math.abs(offsetX) < SNAP_DISTANCE && Math.abs(offsetY) < SNAP_DISTANCE) {
+                animateSnapGroup(group, offsetX, offsetY, () => {
+                    for (let p of group) {
+                        p.fixed = true;
+                        p.group = group;
+                    }
+                    updateProgress();
+                    draw();
+                });
+                return true;
+            }
+            return false;
+        }
+        
+        // Анимация перемещения группы
+        function animateSnapGroup(group, deltaX, deltaY, callback) {
+            const startPositions = group.map(p => ({ x: p.x, y: p.y }));
             const startTime = performance.now();
+            const duration = 120;
             
             function animate(currentTime) {
                 const elapsed = currentTime - startTime;
                 const progress = Math.min(1, elapsed / duration);
                 const easeProgress = 1 - Math.pow(1 - progress, 3);
-                piece.x = startX + (targetX - startX) * easeProgress;
-                piece.y = startY + (targetY - startY) * easeProgress;
+                
+                group.forEach((p, idx) => {
+                    p.x = startPositions[idx].x + deltaX * easeProgress;
+                    p.y = startPositions[idx].y + deltaY * easeProgress;
+                });
                 draw();
+                
                 if (progress < 1) {
                     requestAnimationFrame(animate);
                 } else {
-                    piece.x = targetX;
-                    piece.y = targetY;
                     if (callback) callback();
                     draw();
-                    updateProgress();
                 }
             }
             requestAnimationFrame(animate);
         }
         
-        function trySnapToCorrect(piece){
-            const snapDistance = 50;
-            if(piece.fixed) return false;
+        // Объединить две группы
+        function mergeGroups(groupA, groupB) {
+            if (groupA === groupB) return false;
+            if (groupA[0].fixed && groupB[0].fixed) return false;
+            if (groupA[0].fixed) {
+                // B присоединяется к A
+                const offsetX = groupA[0].correctX - groupB[0].x;
+                const offsetY = groupA[0].correctY - groupB[0].y;
+                for (let p of groupB) {
+                    p.x += offsetX;
+                    p.y += offsetY;
+                    p.group = groupA;
+                }
+                groupA.push(...groupB);
+                return true;
+            } else if (groupB[0].fixed) {
+                const offsetX = groupB[0].correctX - groupA[0].x;
+                const offsetY = groupB[0].correctY - groupA[0].y;
+                for (let p of groupA) {
+                    p.x += offsetX;
+                    p.y += offsetY;
+                    p.group = groupB;
+                }
+                groupB.push(...groupA);
+                return true;
+            } else {
+                // Обе не зафиксированы - объединяем и центрируем по первой
+                const newGroup = [...groupA, ...groupB];
+                for (let p of groupB) {
+                    p.group = newGroup;
+                }
+                for (let p of groupA) {
+                    p.group = newGroup;
+                }
+                return true;
+            }
+        }
+        
+        // Проверить, нужно ли объединить группы
+        function tryMergeGroups(groupA, groupB) {
+            if (groupA === groupB) return false;
+            if (groupA[0].fixed && groupB[0].fixed) return false;
             
-            const group = piece.group || [piece];
+            // Проверяем расстояние между группами
+            let minDist = Infinity;
+            for (let pA of groupA) {
+                for (let pB of groupB) {
+                    const dist = Math.hypot(
+                        (pA.x + pA.w/2) - (pB.x + pB.w/2),
+                        (pA.y + pA.h/2) - (pB.y + pB.h/2)
+                    );
+                    minDist = Math.min(minDist, dist);
+                }
+            }
             
-            // Проверяем, близко ли вся группа к своим правильным позициям
-            let allNearCorrect = true;
-            let avgOffsetX = 0, avgOffsetY = 0;
+            // Проверяем, должны ли эти группы быть рядом по правильным позициям
+            let shouldBeNear = false;
+            for (let pA of groupA) {
+                for (let pB of groupB) {
+                    const correctDist = Math.hypot(
+                        (pA.correctX + pA.w/2) - (pB.correctX + pB.w/2),
+                        (pA.correctY + pA.h/2) - (pB.correctY + pB.h/2)
+                    );
+                    if (correctDist < 80) {
+                        shouldBeNear = true;
+                        break;
+                    }
+                }
+            }
             
-            group.forEach(p => {
-                const dx = p.x - p.correctX;
-                const dy = p.y - p.correctY;
-                avgOffsetX += dx;
-                avgOffsetY += dy;
-                if(Math.hypot(dx, dy) >= snapDistance) allNearCorrect = false;
-            });
-            
-            avgOffsetX /= group.length;
-            avgOffsetY /= group.length;
-            
-            if(allNearCorrect || (Math.abs(avgOffsetX) < snapDistance && Math.abs(avgOffsetY) < snapDistance)){
-                let completed = 0;
-                group.forEach(p => {
-                    animateSnap(p, p.correctX, p.correctY, () => {
-                        completed++;
-                        if(completed === group.length) {
-                            group.forEach(piece => { piece.fixed = true; });
+            if (shouldBeNear && minDist < GROUP_SNAP_DISTANCE) {
+                // Объединяем
+                if (groupA[0].fixed) {
+                    // A фиксирована - B притягивается к A
+                    let closest = null;
+                    let minCorrectDist = Infinity;
+                    for (let pA of groupA) {
+                        for (let pB of groupB) {
+                            const correctDist = Math.hypot(
+                                (pA.correctX + pA.w/2) - (pB.correctX + pB.w/2),
+                                (pA.correctY + pA.h/2) - (pB.correctY + pB.h/2)
+                            );
+                            if (correctDist < minCorrectDist) {
+                                minCorrectDist = correctDist;
+                                closest = { pA, pB };
+                            }
+                        }
+                    }
+                    if (closest) {
+                        const offsetX = (closest.pA.correctX + closest.pA.w/2) - (closest.pB.x + closest.pB.w/2);
+                        const offsetY = (closest.pA.correctY + closest.pA.h/2) - (closest.pB.y + closest.pB.h/2);
+                        animateSnapGroup(groupB, offsetX, offsetY, () => {
+                            for (let p of groupB) {
+                                p.group = groupA;
+                                p.fixed = true;
+                            }
+                            groupA.push(...groupB);
                             updateProgress();
                             draw();
+                        });
+                    }
+                } else if (groupB[0].fixed) {
+                    let closest = null;
+                    let minCorrectDist = Infinity;
+                    for (let pB of groupB) {
+                        for (let pA of groupA) {
+                            const correctDist = Math.hypot(
+                                (pB.correctX + pB.w/2) - (pA.correctX + pA.w/2),
+                                (pB.correctY + pB.h/2) - (pA.correctY + pA.h/2)
+                            );
+                            if (correctDist < minCorrectDist) {
+                                minCorrectDist = correctDist;
+                                closest = { pA, pB };
+                            }
                         }
-                    });
-                });
+                    }
+                    if (closest) {
+                        const offsetX = (closest.pB.correctX + closest.pB.w/2) - (closest.pA.x + closest.pA.w/2);
+                        const offsetY = (closest.pB.correctY + closest.pB.h/2) - (closest.pA.y + closest.pA.h/2);
+                        animateSnapGroup(groupA, offsetX, offsetY, () => {
+                            for (let p of groupA) {
+                                p.group = groupB;
+                                p.fixed = true;
+                            }
+                            groupB.push(...groupA);
+                            updateProgress();
+                            draw();
+                        });
+                    }
+                } else {
+                    // Обе не фиксированы - объединяем
+                    const newGroup = [...groupA, ...groupB];
+                    for (let p of groupA) p.group = newGroup;
+                    for (let p of groupB) p.group = newGroup;
+                    draw();
+                    return true;
+                }
                 return true;
             }
             return false;
         }
         
-        function trySnapPieces(pieceA, pieceB) {
-            if(pieceA.group === pieceB.group) return false;
-            if(pieceA.fixed || pieceB.fixed) return false;
-            
-            // Проверяем, должны ли эти кусочки соприкасаться
-            const dx = (pieceA.x + pieceA.w/2) - (pieceB.x + pieceB.w/2);
-            const dy = (pieceA.y + pieceA.h/2) - (pieceB.y + pieceB.h/2);
-            const correctDx = (pieceA.correctX + pieceA.w/2) - (pieceB.correctX + pieceB.w/2);
-            const correctDy = (pieceA.correctY + pieceA.h/2) - (pieceB.correctY + pieceB.h/2);
-            
-            const tolerance = 60;
-            
-            if(Math.abs(dx - correctDx) < tolerance && Math.abs(dy - correctDy) < tolerance) {
-                // Объединяем группы
-                const groupA = pieceA.group || [pieceA];
-                const groupB = pieceB.group || [pieceB];
-                const merged = [...new Set([...groupA, ...groupB])];
-                
-                // Выравниваем всю группу
-                const rootPiece = merged[0];
-                const rootCorrectX = rootPiece.correctX;
-                const rootCorrectY = rootPiece.correctY;
-                
-                merged.forEach(p => {
-                    p.x = p.correctX + (rootPiece.x - rootCorrectX);
-                    p.y = p.correctY + (rootPiece.y - rootCorrectY);
-                    p.group = merged;
-                });
-                
-                draw();
-                updateProgress();
-                return true;
+        // Проверить все возможные объединения
+        function checkAllMerges() {
+            let merged = true;
+            let iterations = 0;
+            while (merged && iterations < 10) {
+                merged = false;
+                const groups = new Map();
+                for (let p of pieces) {
+                    const groupId = p.group === null ? p.id : p.group[0]?.id || p.id;
+                    if (!groups.has(groupId)) groups.set(groupId, []);
+                    if (p.group === null) groups.get(groupId).push(p);
+                    else groups.get(groupId).push(...(p.group === p ? [p] : p.group));
+                }
+                const uniqueGroups = [...new Set(groups.values())];
+                for (let i = 0; i < uniqueGroups.length; i++) {
+                    for (let j = i + 1; j < uniqueGroups.length; j++) {
+                        if (tryMergeGroups(uniqueGroups[i], uniqueGroups[j])) {
+                            merged = true;
+                        }
+                    }
+                }
+                iterations++;
             }
-            return false;
+        }
+        
+        function trySnapToCorrect(piece) {
+            if (piece.fixed) return false;
+            const group = getGroup(piece);
+            return snapGroupToCorrect(group, null);
         }
         
         async function loadPiecesInfo() {
@@ -542,72 +586,84 @@
             });
         }
         
-        // Функция для разбрасывания кусочков
-        function getRandomPositionOutside(w, h, existingPieces, canvasW, canvasH, boardOffsetX, boardOffsetY, boardW, boardH) {
-            const padding = 30;
-            const positions = [];
+        // Генерация случайной позиции вне области сборки
+        function getRandomOutsidePosition(w, h, existingPieces, canvasW, canvasH, boardX, boardY, boardW, boardH) {
+            const padding = 20;
+            const margin = 30;
+            
+            // Определяем доступные области
+            const areas = [];
             
             // Верхняя область
-            for(let x = padding; x < canvasW - w - padding; x += w + 20) {
-                for(let y = padding; y < boardOffsetY - h - padding; y += h + 20) {
-                    positions.push({x, y});
-                }
+            if (boardY - h - margin > padding) {
+                areas.push({
+                    xMin: padding,
+                    xMax: canvasW - w - padding,
+                    yMin: padding,
+                    yMax: boardY - h - margin
+                });
             }
             // Нижняя область
-            for(let x = padding; x < canvasW - w - padding; x += w + 20) {
-                for(let y = boardOffsetY + boardH + padding; y < canvasH - h - padding; y += h + 20) {
-                    positions.push({x, y});
-                }
+            if (boardY + boardH + margin + h < canvasH - padding) {
+                areas.push({
+                    xMin: padding,
+                    xMax: canvasW - w - padding,
+                    yMin: boardY + boardH + margin,
+                    yMax: canvasH - h - padding
+                });
             }
             // Левая область
-            for(let y = boardOffsetY; y < boardOffsetY + boardH; y += h + 20) {
-                for(let x = padding; x < boardOffsetX - w - padding; x += w + 20) {
-                    positions.push({x, y});
-                }
+            if (boardX - w - margin > padding) {
+                areas.push({
+                    xMin: padding,
+                    xMax: boardX - w - margin,
+                    yMin: boardY,
+                    yMax: boardY + boardH - h
+                });
             }
             // Правая область
-            for(let y = boardOffsetY; y < boardOffsetY + boardH; y += h + 20) {
-                for(let x = boardOffsetX + boardW + padding; x < canvasW - w - padding; x += w + 20) {
-                    positions.push({x, y});
+            if (boardX + boardW + margin + w < canvasW - padding) {
+                areas.push({
+                    xMin: boardX + boardW + margin,
+                    xMax: canvasW - w - padding,
+                    yMin: boardY,
+                    yMax: boardY + boardH - h
+                });
+            }
+            
+            if (areas.length === 0) {
+                return { x: margin, y: margin };
+            }
+            
+            // Выбираем случайную область
+            const area = areas[Math.floor(Math.random() * areas.length)];
+            const x = area.xMin + Math.random() * (area.xMax - area.xMin);
+            const y = area.yMin + Math.random() * (area.yMax - area.yMin);
+            
+            // Проверяем на пересечение с существующими
+            for (let existing of existingPieces) {
+                if (Math.abs(existing.x - x) < w + 20 && Math.abs(existing.y - y) < h + 20) {
+                    return getRandomOutsidePosition(w, h, existingPieces, canvasW, canvasH, boardX, boardY, boardW, boardH);
                 }
             }
             
-            // Перемешиваем
-            for(let i = positions.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [positions[i], positions[j]] = [positions[j], positions[i]];
-            }
-            
-            // Ищем свободное место
-            for(let pos of positions) {
-                let overlapping = false;
-                for(let p of existingPieces) {
-                    if(Math.abs(p.x - pos.x) < w + 20 && Math.abs(p.y - pos.y) < h + 20) {
-                        overlapping = true;
-                        break;
-                    }
-                }
-                if(!overlapping) return pos;
-            }
-            
-            // Если не нашли - кладём в угол
-            return { x: padding, y: padding };
+            return { x, y };
         }
         
-        async function initPuzzle(){
+        async function initPuzzle() {
             loadingSpinner.classList.remove('hidden');
             
             try {
                 const piecesInfo = await loadPiecesInfo();
                 console.log(`📦 Загружено ${piecesInfo.length} кусочков`);
                 
-                if(piecesInfo.length === 0) {
+                if (piecesInfo.length === 0) {
                     throw new Error('Нет данных о кусочках пазла');
                 }
                 
-                // Загружаем все кусочки
+                // Загружаем изображения
                 const loadedPieces = [];
-                for(let i = 0; i < piecesInfo.length; i++) {
+                for (let i = 0; i < piecesInfo.length; i++) {
                     const info = piecesInfo[i];
                     const img = await loadPieceImage(info.id);
                     loadedPieces.push({
@@ -639,24 +695,24 @@
                 const originalPuzzleW = maxX - minX;
                 const originalPuzzleH = maxY - minY;
                 
-                // Вычисляем масштаб (целевой размер пазла ~70% экрана, кусочек ~120-150px)
-                const targetScreenSize = Math.min(window.innerWidth, window.innerHeight) * 0.7;
-                const targetPieceSize = 140;
+                // Вычисляем масштаб
+                const targetScreenSize = Math.min(window.innerWidth, window.innerHeight) * 0.65;
+                const targetPieceSize = 130;
                 const originalPieceSize = loadedPieces[0].originalW;
                 
                 const scaleByScreen = targetScreenSize / Math.max(originalPuzzleW, originalPuzzleH);
                 const scaleByPiece = targetPieceSize / originalPieceSize;
-                globalScale = Math.min(scaleByScreen, scaleByPiece, 1.2);
+                globalScale = Math.min(scaleByScreen, scaleByPiece, 1.0);
                 
-                console.log(`📐 Масштаб: ${globalScale.toFixed(3)} (ориг. кусок ${originalPieceSize}px → ${Math.round(originalPieceSize * globalScale)}px)`);
+                console.log(`📐 Масштаб: ${globalScale.toFixed(3)}`);
                 
-                // Применяем масштаб ко всем кусочкам
+                // Масштабируем
                 pieces = [];
                 let boardMinX = Infinity, boardMinY = Infinity;
                 let boardMaxX = -Infinity, boardMaxY = -Infinity;
                 
-                for(let p of loadedPieces) {
-                    const scaledPiece = {
+                for (let p of loadedPieces) {
+                    const scaled = {
                         id: p.id,
                         img: p.img,
                         correctX: p.originalCorrectX * globalScale,
@@ -667,25 +723,24 @@
                         fixed: false,
                         group: null
                     };
-                    pieces.push(scaledPiece);
-                    boardMinX = Math.min(boardMinX, scaledPiece.correctX);
-                    boardMinY = Math.min(boardMinY, scaledPiece.correctY);
-                    boardMaxX = Math.max(boardMaxX, scaledPiece.correctX + scaledPiece.w);
-                    boardMaxY = Math.max(boardMaxY, scaledPiece.correctY + scaledPiece.h);
+                    pieces.push(scaled);
+                    boardMinX = Math.min(boardMinX, scaled.correctX);
+                    boardMinY = Math.min(boardMinY, scaled.correctY);
+                    boardMaxX = Math.max(boardMaxX, scaled.correctX + scaled.w);
+                    boardMaxY = Math.max(boardMaxY, scaled.correctY + scaled.h);
                 }
                 
-                // Размеры доски (области сборки)
                 const boardW = boardMaxX - boardMinX;
                 const boardH = boardMaxY - boardMinY;
                 
-                // Настраиваем canvas (с отступами для разбросанных кусочков)
-                const padding = Math.max(300, Math.min(500, boardW * 0.3));
-                const canvasW = boardW + padding * 2;
-                const canvasH = boardH + padding * 2;
-                const boardOffsetX = padding + (canvasW - 2*padding - boardW) / 2;
-                const boardOffsetY = padding + (canvasH - 2*padding - boardH) / 2;
+                // Отступы для canvas
+                const margin = Math.max(300, Math.min(500, Math.max(boardW, boardH) * 0.4));
+                const canvasW = boardW + margin * 2;
+                const canvasH = boardH + margin * 2;
+                const boardOffsetX = margin + (canvasW - margin * 2 - boardW) / 2;
+                const boardOffsetY = margin + (canvasH - margin * 2 - boardH) / 2;
                 
-                // Смещаем правильные позиции в центр canvas
+                // Смещаем правильные позиции в центр
                 const offsetX = boardOffsetX - boardMinX;
                 const offsetY = boardOffsetY - boardMinY;
                 
@@ -694,29 +749,35 @@
                     p.correctY += offsetY;
                 });
                 
+                // Обновляем границы доски
+                boardRect = {
+                    x: boardOffsetX,
+                    y: boardOffsetY,
+                    w: boardW,
+                    h: boardH
+                };
+                
                 canvas.width = canvasW;
                 canvas.height = canvasH;
                 
                 // Разбрасываем кусочки
                 const scattered = [];
-                for(let p of pieces) {
-                    const pos = getRandomPositionOutside(p.w, p.h, scattered, canvasW, canvasH, boardOffsetX, boardOffsetY, boardW, boardH);
+                for (let p of pieces) {
+                    const pos = getRandomOutsidePosition(p.w, p.h, scattered, canvasW, canvasH, boardRect.x, boardRect.y, boardRect.w, boardRect.h);
                     p.x = pos.x;
                     p.y = pos.y;
+                    p.group = null;
                     scattered.push(p);
                 }
                 
                 console.log(`✅ Загружено ${pieces.length} кусочков`);
-                console.log(`📐 Canvas: ${canvasW}x${canvasH}`);
-                console.log(`📐 Область сборки: x=${boardOffsetX}, y=${boardOffsetY}, w=${boardW}, h=${boardH}`);
                 
                 updateProgress();
                 draw();
-                
-                // Сбрасываем камеру
                 resetView();
+                gameReady = true;
                 
-            } catch(error) {
+            } catch (error) {
                 console.error('Ошибка загрузки пазла:', error);
                 alert('Не удалось загрузить пазл. Пожалуйста, обновите страницу.');
             } finally {
@@ -724,101 +785,82 @@
             }
         }
         
-        function draw(){
+        function draw() {
+            if (!ctx) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Фон
             ctx.fillStyle = "#1a2418";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Сетка
-            ctx.strokeStyle = "rgba(255,255,255,0.05)";
-            ctx.lineWidth = 1;
-            for(let i = 0; i < canvas.width; i += 100){
-                ctx.beginPath();
-                ctx.moveTo(i, 0);
-                ctx.lineTo(i, canvas.height);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(0, i);
-                ctx.lineTo(canvas.width, i);
-                ctx.stroke();
-            }
+            // Рисуем область сборки
+            ctx.strokeStyle = "rgba(215, 175, 85, 0.5)";
+            ctx.lineWidth = 3;
+            ctx.setLineDash([12, 8]);
+            ctx.strokeRect(boardRect.x - 8, boardRect.y - 8, boardRect.w + 16, boardRect.h + 16);
+            ctx.setLineDash([]);
             
-            // Рисуем область сборки (жёлтая рамка)
-            if(pieces.length > 0) {
-                let boardMinX = Infinity, boardMinY = Infinity;
-                let boardMaxX = -Infinity, boardMaxY = -Infinity;
-                pieces.forEach(p => {
-                    boardMinX = Math.min(boardMinX, p.correctX);
-                    boardMinY = Math.min(boardMinY, p.correctY);
-                    boardMaxX = Math.max(boardMaxX, p.correctX + p.w);
-                    boardMaxY = Math.max(boardMaxY, p.correctY + p.h);
-                });
-                ctx.strokeStyle = "rgba(255,215,0,0.4)";
-                ctx.lineWidth = 4;
-                ctx.setLineDash([15, 10]);
-                ctx.strokeRect(boardMinX - 10, boardMinY - 10, (boardMaxX - boardMinX) + 20, (boardMaxY - boardMinY) + 20);
-                ctx.setLineDash([]);
-            }
+            // Тень для области сборки
+            ctx.fillStyle = "rgba(215, 175, 85, 0.05)";
+            ctx.fillRect(boardRect.x - 4, boardRect.y - 4, boardRect.w + 8, boardRect.h + 8);
             
-            // Рисуем кусочки
-            pieces.forEach(p => {
-                const isSelected = (p === selectedPiece && !p.fixed);
-                const scaleHover = isSelected ? 1.05 : 1;
-                ctx.save();
-                let drawX = p.x, drawY = p.y, drawW = p.w, drawH = p.h;
-                if (scaleHover !== 1) {
-                    const offX = (p.w * (scaleHover - 1)) / 2;
-                    const offY = (p.h * (scaleHover - 1)) / 2;
-                    drawX = p.x - offX;
-                    drawY = p.y - offY;
-                    drawW = p.w * scaleHover;
-                    drawH = p.h * scaleHover;
-                }
-                if (isSelected) {
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = "rgba(255, 215, 0, 0.6)";
-                } else {
-                    ctx.shadowBlur = 4;
-                    ctx.shadowColor = "rgba(0,0,0,0.3)";
-                }
-                ctx.drawImage(p.img, drawX, drawY, drawW, drawH);
-                ctx.shadowBlur = 0;
-                
-                if (isSelected) {
-                    ctx.strokeStyle = "#ffd27a";
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(drawX, drawY, drawW, drawH);
-                } else if(p.fixed){
-                    ctx.strokeStyle = "#4caf50";
+            // Рисуем подсказки правильных позиций для незафиксированных
+            for (let p of pieces) {
+                if (!p.fixed && Math.hypot(p.x - p.correctX, p.y - p.correctY) < 100) {
+                    ctx.strokeStyle = "rgba(255, 200, 100, 0.35)";
                     ctx.lineWidth = 2;
-                    ctx.strokeRect(drawX, drawY, drawW, drawH);
-                }
-                
-                // Показываем контур правильной позиции для нефиксированных кусочков
-                if (!p.fixed && Math.hypot(p.x - p.correctX, p.y - p.correctY) < 120) {
-                    ctx.strokeStyle = "rgba(255, 200, 0, 0.5)";
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([6, 6]);
+                    ctx.setLineDash([6, 8]);
                     ctx.strokeRect(p.correctX, p.correctY, p.w, p.h);
                     ctx.setLineDash([]);
                 }
+            }
+            
+            // Рисуем кусочки
+            for (let p of pieces) {
+                ctx.save();
+                
+                const isSelected = selectedPiece && getGroup(selectedPiece).includes(p);
+                
+                let drawX = p.x, drawY = p.y;
+                
+                if (isSelected && !p.fixed) {
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = "rgba(255, 215, 0, 0.6)";
+                    // Небольшой подъем
+                    drawY -= 4;
+                } else if (p.fixed) {
+                    ctx.shadowBlur = 4;
+                    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+                } else {
+                    ctx.shadowBlur = 3;
+                    ctx.shadowColor = "rgba(0, 0, 0, 0.2)";
+                }
+                
+                ctx.drawImage(p.img, drawX, drawY, p.w, p.h);
+                ctx.shadowBlur = 0;
+                
+                // Рамка для зафиксированных
+                if (p.fixed) {
+                    ctx.strokeStyle = "#4caf50";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(drawX, drawY, p.w, p.h);
+                }
+                
                 ctx.restore();
-            });
-        }
-        
-        function checkWin(){
-            const allPlaced = pieces.length > 0 && pieces.every(p => p.fixed === true);
-            if(allPlaced && gameStarted && !winShown){
-                winShown = true;
-                setTimeout(() => {
-                    winOverlay.classList.remove("hidden");
-                    winOverlay.classList.add("active");
-                    if(audio && audioEnabled) audio.pause();
-                }, 500);
             }
         }
         
-        function getCanvasCoords(clientX, clientY){
+        function checkWin() {
+            const allFixed = pieces.length > 0 && pieces.every(p => p.fixed === true);
+            if (allFixed && gameReady && !winShown) {
+                winShown = true;
+                setTimeout(() => {
+                    winOverlay.classList.add("active");
+                }, 300);
+            }
+        }
+        
+        function getCanvasCoords(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
             return {
                 x: (clientX - rect.left) * (canvas.width / rect.width),
@@ -826,101 +868,128 @@
             };
         }
         
-        function getPieceAt(m){
-            for(let i = pieces.length-1; i >= 0; i--) {
+        function getPieceAt(x, y) {
+            // Идем с конца (верхние)
+            for (let i = pieces.length - 1; i >= 0; i--) {
                 const p = pieces[i];
-                if(p.fixed) continue;
-                if(m.x >= p.x && m.x <= p.x + p.w && m.y >= p.y && m.y <= p.y + p.h) {
+                if (p.fixed) continue;
+                if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
                     return p;
                 }
             }
             return null;
         }
         
-        function onMouseDown(e){
+        function onPointerDown(e) {
             e.preventDefault();
-            if(!gameStarted) return;
-            const m = getCanvasCoords(e.clientX, e.clientY);
-            const piece = getPieceAt(m);
-            if(piece) {
+            if (!gameReady) return;
+            
+            const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+            if (!clientX || !clientY) return;
+            
+            const coords = getCanvasCoords(clientX, clientY);
+            const piece = getPieceAt(coords.x, coords.y);
+            
+            if (piece && !piece.fixed) {
                 selectedPiece = piece;
-                const group = piece.group || [piece];
+                const group = getGroup(piece);
+                selectedGroupPieces = [...group];
+                
+                // Находим опорную точку для перетаскивания
                 const firstPiece = group[0];
-                dragOffsetX = m.x - firstPiece.x;
-                dragOffsetY = m.y - firstPiece.y;
+                dragOffsetX = coords.x - firstPiece.x;
+                dragOffsetY = coords.y - firstPiece.y;
+                dragStartGroupPos = { x: firstPiece.x, y: firstPiece.y };
                 return;
             }
+            
+            // Перетаскивание холста
             isDraggingWrapper = true;
-            wrapperDragStart.x = e.clientX - panX;
-            wrapperDragStart.y = e.clientY - panY;
+            wrapperDragStart.x = clientX - panX;
+            wrapperDragStart.y = clientY - panY;
         }
         
-        function onMouseMove(e){
-            if(!gameStarted) return;
-            if(selectedPiece){
-                if(selectedPiece.fixed) {
-                    selectedPiece = null;
-                    return;
-                }
-                const m = getCanvasCoords(e.clientX, e.clientY);
-                const group = selectedPiece.group || [selectedPiece];
+        function onPointerMove(e) {
+            if (!gameReady) return;
+            
+            const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+            if (!clientX || !clientY) return;
+            
+            if (selectedPiece && !selectedPiece.fixed) {
+                const coords = getCanvasCoords(clientX, clientY);
+                const group = getGroup(selectedPiece);
                 const firstPiece = group[0];
-                const newX = m.x - dragOffsetX;
-                const newY = m.y - dragOffsetY;
-                const dx = newX - firstPiece.x;
-                const dy = newY - firstPiece.y;
-                group.forEach(p => {
-                    if(!p.fixed) {
-                        p.x += dx;
-                        p.y += dy;
+                
+                const newX = coords.x - dragOffsetX;
+                const newY = coords.y - dragOffsetY;
+                const deltaX = newX - firstPiece.x;
+                const deltaY = newY - firstPiece.y;
+                
+                for (let p of group) {
+                    if (!p.fixed) {
+                        p.x += deltaX;
+                        p.y += deltaY;
                     }
-                });
+                }
                 draw();
                 return;
             }
-            if(isDraggingWrapper){
-                panX = e.clientX - wrapperDragStart.x;
-                panY = e.clientY - wrapperDragStart.y;
+            
+            if (isDraggingWrapper) {
+                panX = clientX - wrapperDragStart.x;
+                panY = clientY - wrapperDragStart.y;
                 wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
             }
         }
         
-        function onMouseUp(e){
-            if(!gameStarted) return;
-            if(selectedPiece){
-                if(!selectedPiece.fixed) {
-                    const group = selectedPiece.group || [selectedPiece];
-                    let snappedToBoard = false;
-                    for(let p of group){
-                        if(!p.fixed && trySnapToCorrect(p)){ snappedToBoard = true; break; }
+        function onPointerUp(e) {
+            if (!gameReady) return;
+            
+            if (selectedPiece && !selectedPiece.fixed) {
+                const group = getGroup(selectedPiece);
+                
+                // Сначала проверяем магнит к правильному месту
+                let snapped = false;
+                for (let p of group) {
+                    if (trySnapToCorrect(p)) {
+                        snapped = true;
+                        break;
                     }
-                    if(!snappedToBoard){
-                        for(let i = 0; i < group.length; i++) {
-                            for(let j = i+1; j < group.length; j++) {
-                                trySnapPieces(group[i], group[j]);
-                            }
-                        }
-                        for(let other of pieces) {
-                            if(group.includes(other)) continue;
-                            for(let p of group) {
-                                if(trySnapPieces(p, other)) break;
+                }
+                
+                // Если не примагнитились, проверяем объединения с другими группами
+                if (!snapped) {
+                    checkAllMerges();
+                    
+                    // Дополнительная проверка: если группа не зафиксирована, проверяем магнит к любой правильной позиции
+                    if (!group[0].fixed) {
+                        for (let p of group) {
+                            const distToCorrect = Math.hypot(p.x - p.correctX, p.y - p.correctY);
+                            if (distToCorrect < SNAP_DISTANCE) {
+                                snapGroupToCorrect(group, null);
+                                break;
                             }
                         }
                     }
                 }
+                
                 selectedPiece = null;
+                selectedGroupPieces = [];
                 draw();
+                updateProgress();
             }
+            
             isDraggingWrapper = false;
         }
         
-        function onWheel(e){
+        function onWheel(e) {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
             const oldScale = scale;
-            scale = Math.min(Math.max(0.3, scale + delta), 3);
+            scale = Math.min(Math.max(0.3, scale + delta), 2.5);
             
-            // Корректируем pan, чтобы масштабирование было относительно центра экрана
             const rect = wrapper.getBoundingClientRect();
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2;
@@ -931,9 +1000,9 @@
             wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
         }
         
-        function zoom(delta){
+        function zoom(delta) {
             const oldScale = scale;
-            scale = Math.min(Math.max(0.3, scale + delta), 3);
+            scale = Math.min(Math.max(0.3, scale + delta), 2.5);
             
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2;
@@ -944,10 +1013,9 @@
             wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
         }
         
-        function resetView(){
-            if(!pieces.length) return;
+        function resetView() {
+            if (!pieces.length) return;
             
-            // Находим границы всех кусочков
             let minX = Infinity, minY = Infinity;
             let maxX = -Infinity, maxY = -Infinity;
             pieces.forEach(p => {
@@ -964,140 +1032,35 @@
             
             scale = Math.min(viewW / contentW, viewH / contentH, 1.2);
             
-            // Центрируем содержимое
-            const canvasCenterX = (minX + maxX) / 2;
-            const canvasCenterY = (minY + maxY) / 2;
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
             
-            panX = window.innerWidth / 2 - canvasCenterX * scale;
-            panY = window.innerHeight / 2 - canvasCenterY * scale;
+            panX = window.innerWidth / 2 - centerX * scale;
+            panY = window.innerHeight / 2 - centerY * scale;
             
             wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
         }
         
-        function toggleMusic() {
-            if(audioEnabled) {
-                audio.pause();
-                audioEnabled = false;
-                musicToggle.innerHTML = "🔇 Включить музыку";
-            } else {
-                audio.play().catch(()=>{});
-                audioEnabled = true;
-                musicToggle.innerHTML = "🔇 Выключить музыку";
-            }
+        function closeWin() {
+            winOverlay.classList.remove("active");
         }
         
-        function downloadTicket() {
-            window.location.href = `/download/${PUZZLE_ID}`;
-        }
+        // Инициализация и обработчики
+        initPuzzle();
         
-        async function startGame(){
-            if(gameStarted) return;
-            await initPuzzle();
-            gameStarted = true;
-            winShown = false;
-            overlay.classList.add("hidden");
-            gameDiv.classList.remove("hidden");
-            musicToggle.classList.remove("hidden");
-            if(audioEnabled) audio.play().catch(()=>{});
-        }
-        
-        // Обработчики
-        startBtn.onclick = startGame;
-        startBtn.ontouchstart = (e) => { e.preventDefault(); startGame(); };
-        
-        document.getElementById('downloadTicketBtn').onclick = downloadTicket;
-        musicToggle.onclick = toggleMusic;
-        
+        document.getElementById('closeWinBtn').onclick = closeWin;
         zoomInBtn.onclick = () => zoom(0.15);
         zoomOutBtn.onclick = () => zoom(-0.15);
         resetViewBtn.onclick = () => resetView();
         
-        canvas.addEventListener('mousedown', onMouseDown);
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        canvas.addEventListener('mousedown', onPointerDown);
+        window.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('mouseup', onPointerUp);
         window.addEventListener('wheel', onWheel, { passive: false });
         
-        // Touch события
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if(!gameStarted) return;
-            const touch = e.touches[0];
-            const m = getCanvasCoords(touch.clientX, touch.clientY);
-            const piece = getPieceAt(m);
-            if(piece) {
-                selectedPiece = piece;
-                const group = piece.group || [piece];
-                const firstPiece = group[0];
-                dragOffsetX = m.x - firstPiece.x;
-                dragOffsetY = m.y - firstPiece.y;
-                return;
-            }
-            isDraggingWrapper = true;
-            wrapperDragStart.x = touch.clientX - panX;
-            wrapperDragStart.y = touch.clientY - panY;
-        });
-        
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if(!gameStarted) return;
-            const touch = e.touches[0];
-            if(selectedPiece){
-                if(selectedPiece.fixed) {
-                    selectedPiece = null;
-                    return;
-                }
-                const m = getCanvasCoords(touch.clientX, touch.clientY);
-                const group = selectedPiece.group || [selectedPiece];
-                const firstPiece = group[0];
-                const newX = m.x - dragOffsetX;
-                const newY = m.y - dragOffsetY;
-                const dx = newX - firstPiece.x;
-                const dy = newY - firstPiece.y;
-                group.forEach(p => {
-                    if(!p.fixed) {
-                        p.x += dx;
-                        p.y += dy;
-                    }
-                });
-                draw();
-                return;
-            }
-            if(isDraggingWrapper){
-                panX = touch.clientX - wrapperDragStart.x;
-                panY = touch.clientY - wrapperDragStart.y;
-                wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
-            }
-        });
-        
-        canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            if(!gameStarted) return;
-            if(selectedPiece){
-                if(!selectedPiece.fixed) {
-                    const group = selectedPiece.group || [selectedPiece];
-                    let snappedToBoard = false;
-                    for(let p of group){
-                        if(!p.fixed && trySnapToCorrect(p)){ snappedToBoard = true; break; }
-                    }
-                    if(!snappedToBoard){
-                        for(let i = 0; i < group.length; i++) {
-                            for(let j = i+1; j < group.length; j++) {
-                                trySnapPieces(group[i], group[j]);
-                            }
-                        }
-                        for(let other of pieces) {
-                            if(group.includes(other)) continue;
-                            for(let p of group) {
-                                if(trySnapPieces(p, other)) break;
-                            }
-                        }
-                    }
-                }
-                selectedPiece = null;
-                draw();
-            }
-            isDraggingWrapper = false;
-        });
+        canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+        canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+        canvas.addEventListener('touchend', onPointerUp);
         
         console.log('🎯 Puzzle page ready, puzzle_id:', PUZZLE_ID);
     })();
