@@ -1,1069 +1,386 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>🧩 Собери пазл</title>
-    <style>
-        * {
-            user-select: none;
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        body {
-            font-family: 'Segoe UI', 'Georgia', serif;
-            overflow: hidden;
-            height: 100vh;
-            background: linear-gradient(135deg, #1a2a1a 0%, #0d1a0d 100%);
-            touch-action: none;
-        }
-        
-        .game-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            background: radial-gradient(circle at 50% 50%, #2a3a2a, #0a150a);
-        }
-        
-        .puzzle-wrapper {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            transform-origin: center center;
-            cursor: grab;
-        }
-        
-        .puzzle-wrapper:active {
-            cursor: grabbing;
-        }
-        
-        canvas {
-            display: block;
-            box-shadow: 0 0 0 4px #d4a555, 0 20px 40px rgba(0,0,0,0.5);
-            border-radius: 24px;
-            background: #1e2a1f;
-            cursor: grab;
-        }
-        
-        canvas:active {
-            cursor: grabbing;
-        }
-        
-        .progress-bar-container {
-            position: fixed;
-            bottom: 24px;
-            left: 24px;
-            right: 24px;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: 40px;
-            padding: 6px;
-            backdrop-filter: blur(12px);
-            border: 1px solid #dba551;
-            z-index: 45;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        
-        .progress-bar {
-            height: 12px;
-            background: linear-gradient(90deg, #e6b85e, #f5d48a);
-            border-radius: 40px;
-            width: 0%;
-            transition: width 0.3s ease;
-            box-shadow: 0 0 8px #ffd27a;
-        }
-        
-        .progress-text {
-            position: fixed;
-            bottom: 56px;
-            left: 40px;
-            color: #ffefcf;
-            font-size: 0.85rem;
-            text-shadow: 0 1px 2px black;
-            z-index: 45;
-            background: rgba(0,0,0,0.5);
-            padding: 4px 14px;
-            border-radius: 20px;
-            font-weight: bold;
-        }
-        
-        .controls {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            display: flex;
-            gap: 12px;
-            z-index: 50;
-        }
-        
-        .control-btn {
-            background: #1f1a10cc;
-            backdrop-filter: blur(12px);
-            border-radius: 50px;
-            padding: 10px 20px;
-            border: 1px solid #e2b870;
-            cursor: pointer;
-            color: #ffefcf;
-            font-weight: bold;
-            font-size: 1.1rem;
-            transition: 0.1s;
-            min-width: 48px;
-        }
-        
-        .control-btn:active {
-            transform: scale(0.95);
-            background: #3a2a18cc;
-        }
-        
-        .win-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 200;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.8s ease;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(15px);
-        }
-        
-        .win-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-        
-        .win-content {
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(20px);
-            border-radius: 60px;
-            padding: 35px 50px;
-            text-align: center;
-            border: 2px solid #e8c28e;
-            box-shadow: 0 0 70px rgba(210, 160, 70, 0.4);
-            animation: flashWin 0.5s ease-out;
-            max-width: 600px;
-            margin: 20px;
-        }
-        
-        @keyframes flashWin {
-            0% { transform: scale(0.7); opacity: 0; }
-            50% { transform: scale(1.02); opacity: 1; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        
-        .win-content h2 {
-            font-size: 2.2rem;
-            color: #FFF5E0;
-            text-shadow: 0 3px 8px black;
-            margin-bottom: 20px;
-        }
-        
-        .win-content p {
-            font-size: 1.2rem;
-            color: #FFF5E0;
-            margin: 12px 0;
-        }
-        
-        .win-content button {
-            background: #6a3e1a;
-            border: none;
-            padding: 14px 32px;
-            font-size: 1.2rem;
-            border-radius: 50px;
-            color: #FFF2D7;
-            cursor: pointer;
-            transition: 0.2s;
-            margin-top: 20px;
-            font-weight: bold;
-            border: 1px solid #e8bc7a;
-        }
-        
-        .win-content button:hover {
-            background: #9b5e2c;
-            transform: scale(1.02);
-        }
-        
-        .hidden {
-            display: none !important;
-        }
-        
-        .loading-spinner {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 1.2rem;
-            background: rgba(0,0,0,0.8);
-            padding: 20px 30px;
-            border-radius: 50px;
-            z-index: 300;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            backdrop-filter: blur(10px);
-            border: 1px solid #dba551;
-        }
-        
-        .spinner {
-            width: 24px;
-            height: 24px;
-            border: 3px solid #dba551;
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        @media (max-width: 768px) {
-            .controls {
-                bottom: 80px;
-            }
-            .progress-text {
-                bottom: 72px;
-            }
-            .win-content {
-                padding: 25px 30px;
-            }
-            .win-content h2 {
-                font-size: 1.6rem;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Puzzle</title>
+
+<style>
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #1a2418;
+    font-family: sans-serif;
+}
+
+#game {
+    position: absolute;
+    inset: 0;
+}
+
+#puzzleWrapper {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transform-origin: center;
+}
+
+canvas {
+    display: block;
+}
+
+#overlay, #winOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    z-index: 10;
+}
+
+.hidden { display: none; }
+
+button {
+    padding: 12px 24px;
+    font-size: 18px;
+    cursor: pointer;
+}
+</style>
 </head>
+
 <body>
 
-<div id="game" class="game-container">
-    <div class="puzzle-wrapper" id="puzzleWrapper">
+<div id="overlay">
+    <button id="startBtn">Начать</button>
+</div>
+
+<div id="winOverlay" class="hidden">
+    <h1>Готово 🎉</h1>
+</div>
+
+<div id="game" class="hidden">
+    <div id="puzzleWrapper">
         <canvas id="puzzleCanvas"></canvas>
     </div>
-    <div class="progress-bar-container">
-        <div class="progress-bar" id="progressBar"></div>
-    </div>
-    <div class="progress-text" id="progressText">🧩 Собрано 0 / 0</div>
-    <div class="controls">
-        <button class="control-btn" id="zoomOutBtn">−</button>
-        <button class="control-btn" id="zoomInBtn">+</button>
-        <button class="control-btn" id="resetViewBtn">⊙</button>
-    </div>
-</div>
-
-<div id="winOverlay" class="win-overlay">
-    <div class="win-content">
-        <h2>🎉 Поздравляю! 🎉</h2>
-        <p>Ты собрала весь пазл!</p>
-        <p>✨ Молодец! ✨</p>
-        <button id="closeWinBtn">Закрыть</button>
-    </div>
-</div>
-
-<div id="loadingSpinner" class="loading-spinner hidden">
-    <div class="spinner"></div>
-    <span>Загрузка пазла...</span>
 </div>
 
 <script>
-    const PUZZLE_ID = '{{ puzzle_id }}';
-    
-    (function(){
-        let pieces = [];
-        let selectedPiece = null;
-        let selectedGroupPieces = []; // Все кусочки в группе выбранного
-        let dragOffsetX = 0, dragOffsetY = 0;
-        let dragStartGroupPos = { x: 0, y: 0 };
-        
-        let canvas = document.getElementById('puzzleCanvas');
-        let ctx = canvas.getContext('2d');
-        
-        let gameReady = false;
-        let winShown = false;
-        
-        let scale = 1;
-        let panX = 0, panY = 0;
-        let wrapper = document.getElementById('puzzleWrapper');
-        let isDraggingWrapper = false;
-        let wrapperDragStart = {x: 0, y: 0};
-        
-        const gameDiv = document.getElementById('game');
-        const winOverlay = document.getElementById('winOverlay');
-        const progressBar = document.getElementById('progressBar');
-        const progressText = document.getElementById('progressText');
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        const zoomInBtn = document.getElementById('zoomInBtn');
-        const zoomOutBtn = document.getElementById('zoomOutBtn');
-        const resetViewBtn = document.getElementById('resetViewBtn');
-        
-        let globalScale = 1;
-        
-        // Размеры области сборки
-        let boardRect = { x: 0, y: 0, w: 0, h: 0 };
-        
-        // Константы для магнитов
-        const SNAP_DISTANCE = 55;
-        const GROUP_SNAP_DISTANCE = 65;
-        
-        function updateProgress() {
-            const fixedCount = pieces.filter(p => p.fixed === true).length;
-            const total = pieces.length;
-            const percent = total > 0 ? (fixedCount / total) * 100 : 0;
-            if(progressBar) progressBar.style.width = `${percent}%`;
-            if(progressText) progressText.innerHTML = `🧩 Собрано ${fixedCount} / ${total}`;
-            checkWin();
+const PUZZLE_ID = '{{ puzzle_id }}';
+
+(function(){
+
+/* ================= STATE ================= */
+
+let pieces = [];
+let selectedPiece = null;
+let dragMode = null;
+
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+let canvas = document.getElementById('puzzleCanvas');
+let ctx = canvas.getContext('2d');
+
+let wrapper = document.getElementById('puzzleWrapper');
+
+let scale = 1;
+let panX = 0, panY = 0;
+
+let gameStarted = false;
+
+/* ================= HELPERS ================= */
+
+const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+
+function getMouse(e){
+    const r = canvas.getBoundingClientRect();
+    return {
+        x:(e.clientX - r.left) * canvas.width / r.width,
+        y:(e.clientY - r.top) * canvas.height / r.height
+    };
+}
+
+/* ================= ALPHA HIT ================= */
+
+function isOpaquePixel(piece, x, y){
+    const px = Math.floor((x - piece.x) / piece.w * piece.img.width);
+    const py = Math.floor((y - piece.y) / piece.h * piece.img.height);
+
+    if(px < 0 || py < 0 || px >= piece.img.width || py >= piece.img.height) return false;
+
+    const data = piece.hitCtx.getImageData(px, py, 1, 1).data;
+    return data[3] > 20;
+}
+
+/* ================= GROUP ================= */
+
+function getGroup(p){
+    return p.group ? p.group.pieces : [p];
+}
+
+function mergeGroups(a, b){
+    const g1 = getGroup(a);
+    const g2 = getGroup(b);
+
+    const merged = [...new Set([...g1, ...g2])];
+    const group = { pieces: merged };
+
+    merged.forEach(p => p.group = group);
+}
+
+/* ================= LOAD ================= */
+
+async function initPuzzle(){
+
+    const res = await fetch(`/pieces-info/${PUZZLE_ID}`);
+    const data = await res.json();
+
+    const imgs = await Promise.all(data.map(p=>{
+        return new Promise(res=>{
+            const i = new Image();
+            i.onload = ()=>res(i);
+            i.src = `/piece/${PUZZLE_ID}/${p.id}`;
+        });
+    }));
+
+    let maxW = 0, maxH = 0;
+
+    pieces = data.map((p,i)=>{
+
+        const img = imgs[i];
+
+        const hitCanvas = document.createElement('canvas');
+        hitCanvas.width = img.width;
+        hitCanvas.height = img.height;
+
+        const hitCtx = hitCanvas.getContext('2d');
+        hitCtx.drawImage(img,0,0);
+
+        maxW = Math.max(maxW, p.correct_x + p.width);
+        maxH = Math.max(maxH, p.correct_y + p.height);
+
+        return {
+            id: p.id,
+            img,
+            hitCtx,
+            w: img.width,
+            h: img.height,
+            correctX: p.correct_x,
+            correctY: p.correct_y,
+            x: 0,
+            y: 0,
+            fixed: false,
+            group: null
+        };
+    });
+
+    // ✅ правильный масштаб
+    const target = Math.min(window.innerWidth, window.innerHeight) * 0.6;
+    const scaleFactor = Math.min(target / Math.max(maxW, maxH), 1);
+
+    pieces.forEach(p=>{
+        p.w *= scaleFactor;
+        p.h *= scaleFactor;
+        p.correctX *= scaleFactor;
+        p.correctY *= scaleFactor;
+    });
+
+    const padding = 150;
+
+    canvas.width = maxW * scaleFactor + padding * 2;
+    canvas.height = maxH * scaleFactor + padding * 2;
+
+    pieces.forEach(p=>{
+        p.correctX += padding;
+        p.correctY += padding;
+
+        p.x = Math.random() * canvas.width;
+        p.y = Math.random() * canvas.height;
+    });
+
+    resetView();
+    loop();
+}
+
+/* ================= DRAW ================= */
+
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    pieces.forEach(p=>{
+        ctx.drawImage(p.img, p.x, p.y, p.w, p.h);
+    });
+}
+
+/* ================= PICK ================= */
+
+function getPiece(m){
+    for(let i = pieces.length-1; i>=0; i--){
+        const p = pieces[i];
+        if(p.fixed) continue;
+
+        if(
+            m.x >= p.x && m.x <= p.x+p.w &&
+            m.y >= p.y && m.y <= p.y+p.h &&
+            isOpaquePixel(p, m.x, m.y)
+        ){
+            return p;
         }
-        
-        // Найти группу кусочка
-        function getGroup(piece) {
-            return piece.group || [piece];
-        }
-        
-        // Проверить, находится ли группа рядом с правильными позициями
-        function isGroupNearCorrect(group) {
-            if (!group.length) return false;
-            
-            let totalDist = 0;
-            for (let p of group) {
-                const dx = p.x - p.correctX;
-                const dy = p.y - p.correctY;
-                totalDist += Math.hypot(dx, dy);
-            }
-            const avgDist = totalDist / group.length;
-            return avgDist < SNAP_DISTANCE;
-        }
-        
-        // Примагнитить группу к правильным позициям
-        function snapGroupToCorrect(group, callback) {
-            if (!group.length || group[0].fixed) return false;
-            
-            // Вычисляем смещение
-            let totalDx = 0, totalDy = 0;
-            for (let p of group) {
-                totalDx += p.correctX - p.x;
-                totalDy += p.correctY - p.y;
-            }
-            const offsetX = totalDx / group.length;
-            const offsetY = totalDy / group.length;
-            
-            // Если смещение небольшое - примагничиваем
-            if (Math.abs(offsetX) < SNAP_DISTANCE && Math.abs(offsetY) < SNAP_DISTANCE) {
-                animateSnapGroup(group, offsetX, offsetY, () => {
-                    for (let p of group) {
-                        p.fixed = true;
-                        p.group = group;
-                    }
-                    updateProgress();
-                    draw();
-                });
-                return true;
-            }
-            return false;
-        }
-        
-        // Анимация перемещения группы
-        function animateSnapGroup(group, deltaX, deltaY, callback) {
-            const startPositions = group.map(p => ({ x: p.x, y: p.y }));
-            const startTime = performance.now();
-            const duration = 120;
-            
-            function animate(currentTime) {
-                const elapsed = currentTime - startTime;
-                const progress = Math.min(1, elapsed / duration);
-                const easeProgress = 1 - Math.pow(1 - progress, 3);
-                
-                group.forEach((p, idx) => {
-                    p.x = startPositions[idx].x + deltaX * easeProgress;
-                    p.y = startPositions[idx].y + deltaY * easeProgress;
-                });
-                draw();
-                
-                if (progress < 1) {
-                    requestAnimationFrame(animate);
-                } else {
-                    if (callback) callback();
-                    draw();
-                }
-            }
-            requestAnimationFrame(animate);
-        }
-        
-        // Объединить две группы
-        function mergeGroups(groupA, groupB) {
-            if (groupA === groupB) return false;
-            if (groupA[0].fixed && groupB[0].fixed) return false;
-            if (groupA[0].fixed) {
-                // B присоединяется к A
-                const offsetX = groupA[0].correctX - groupB[0].x;
-                const offsetY = groupA[0].correctY - groupB[0].y;
-                for (let p of groupB) {
-                    p.x += offsetX;
-                    p.y += offsetY;
-                    p.group = groupA;
-                }
-                groupA.push(...groupB);
-                return true;
-            } else if (groupB[0].fixed) {
-                const offsetX = groupB[0].correctX - groupA[0].x;
-                const offsetY = groupB[0].correctY - groupA[0].y;
-                for (let p of groupA) {
-                    p.x += offsetX;
-                    p.y += offsetY;
-                    p.group = groupB;
-                }
-                groupB.push(...groupA);
-                return true;
-            } else {
-                // Обе не зафиксированы - объединяем и центрируем по первой
-                const newGroup = [...groupA, ...groupB];
-                for (let p of groupB) {
-                    p.group = newGroup;
-                }
-                for (let p of groupA) {
-                    p.group = newGroup;
-                }
-                return true;
-            }
-        }
-        
-        // Проверить, нужно ли объединить группы
-        function tryMergeGroups(groupA, groupB) {
-            if (groupA === groupB) return false;
-            if (groupA[0].fixed && groupB[0].fixed) return false;
-            
-            // Проверяем расстояние между группами
-            let minDist = Infinity;
-            for (let pA of groupA) {
-                for (let pB of groupB) {
-                    const dist = Math.hypot(
-                        (pA.x + pA.w/2) - (pB.x + pB.w/2),
-                        (pA.y + pA.h/2) - (pB.y + pB.h/2)
-                    );
-                    minDist = Math.min(minDist, dist);
-                }
-            }
-            
-            // Проверяем, должны ли эти группы быть рядом по правильным позициям
-            let shouldBeNear = false;
-            for (let pA of groupA) {
-                for (let pB of groupB) {
-                    const correctDist = Math.hypot(
-                        (pA.correctX + pA.w/2) - (pB.correctX + pB.w/2),
-                        (pA.correctY + pA.h/2) - (pB.correctY + pB.h/2)
-                    );
-                    if (correctDist < 80) {
-                        shouldBeNear = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (shouldBeNear && minDist < GROUP_SNAP_DISTANCE) {
-                // Объединяем
-                if (groupA[0].fixed) {
-                    // A фиксирована - B притягивается к A
-                    let closest = null;
-                    let minCorrectDist = Infinity;
-                    for (let pA of groupA) {
-                        for (let pB of groupB) {
-                            const correctDist = Math.hypot(
-                                (pA.correctX + pA.w/2) - (pB.correctX + pB.w/2),
-                                (pA.correctY + pA.h/2) - (pB.correctY + pB.h/2)
-                            );
-                            if (correctDist < minCorrectDist) {
-                                minCorrectDist = correctDist;
-                                closest = { pA, pB };
-                            }
-                        }
-                    }
-                    if (closest) {
-                        const offsetX = (closest.pA.correctX + closest.pA.w/2) - (closest.pB.x + closest.pB.w/2);
-                        const offsetY = (closest.pA.correctY + closest.pA.h/2) - (closest.pB.y + closest.pB.h/2);
-                        animateSnapGroup(groupB, offsetX, offsetY, () => {
-                            for (let p of groupB) {
-                                p.group = groupA;
-                                p.fixed = true;
-                            }
-                            groupA.push(...groupB);
-                            updateProgress();
-                            draw();
-                        });
-                    }
-                } else if (groupB[0].fixed) {
-                    let closest = null;
-                    let minCorrectDist = Infinity;
-                    for (let pB of groupB) {
-                        for (let pA of groupA) {
-                            const correctDist = Math.hypot(
-                                (pB.correctX + pB.w/2) - (pA.correctX + pA.w/2),
-                                (pB.correctY + pB.h/2) - (pA.correctY + pA.h/2)
-                            );
-                            if (correctDist < minCorrectDist) {
-                                minCorrectDist = correctDist;
-                                closest = { pA, pB };
-                            }
-                        }
-                    }
-                    if (closest) {
-                        const offsetX = (closest.pB.correctX + closest.pB.w/2) - (closest.pA.x + closest.pA.w/2);
-                        const offsetY = (closest.pB.correctY + closest.pB.h/2) - (closest.pA.y + closest.pA.h/2);
-                        animateSnapGroup(groupA, offsetX, offsetY, () => {
-                            for (let p of groupA) {
-                                p.group = groupB;
-                                p.fixed = true;
-                            }
-                            groupB.push(...groupA);
-                            updateProgress();
-                            draw();
-                        });
-                    }
-                } else {
-                    // Обе не фиксированы - объединяем
-                    const newGroup = [...groupA, ...groupB];
-                    for (let p of groupA) p.group = newGroup;
-                    for (let p of groupB) p.group = newGroup;
-                    draw();
-                    return true;
-                }
-                return true;
-            }
-            return false;
-        }
-        
-        // Проверить все возможные объединения
-        function checkAllMerges() {
-            let merged = true;
-            let iterations = 0;
-            while (merged && iterations < 10) {
-                merged = false;
-                const groups = new Map();
-                for (let p of pieces) {
-                    const groupId = p.group === null ? p.id : p.group[0]?.id || p.id;
-                    if (!groups.has(groupId)) groups.set(groupId, []);
-                    if (p.group === null) groups.get(groupId).push(p);
-                    else groups.get(groupId).push(...(p.group === p ? [p] : p.group));
-                }
-                const uniqueGroups = [...new Set(groups.values())];
-                for (let i = 0; i < uniqueGroups.length; i++) {
-                    for (let j = i + 1; j < uniqueGroups.length; j++) {
-                        if (tryMergeGroups(uniqueGroups[i], uniqueGroups[j])) {
-                            merged = true;
-                        }
-                    }
-                }
-                iterations++;
-            }
-        }
-        
-        function trySnapToCorrect(piece) {
-            if (piece.fixed) return false;
-            const group = getGroup(piece);
-            return snapGroupToCorrect(group, null);
-        }
-        
-        async function loadPiecesInfo() {
-            const response = await fetch(`/pieces-info/${PUZZLE_ID}`);
-            if (!response.ok) throw new Error('Не удалось загрузить информацию о пазле');
-            return await response.json();
-        }
-        
-        function loadPieceImage(pieceId) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.onerror = reject;
-                img.src = `/piece/${PUZZLE_ID}/${pieceId}`;
+    }
+}
+
+/* ================= SNAP ================= */
+
+function trySnap(p){
+
+    if(Math.hypot(p.x - p.correctX, p.y - p.correctY) < 30){
+        p.x = p.correctX;
+        p.y = p.correctY;
+        p.fixed = true;
+        checkWin();
+        return;
+    }
+
+    for(const other of pieces){
+        if(p === other || other.fixed) continue;
+
+        const dx = p.correctX - other.correctX;
+        const dy = p.correctY - other.correctY;
+
+        const targetX = other.x + dx;
+        const targetY = other.y + dy;
+
+        if(Math.hypot(p.x - targetX, p.y - targetY) < 30){
+
+            mergeGroups(p, other);
+
+            const g = getGroup(p);
+            g.forEach(x=>{
+                x.x += (targetX - p.x);
+                x.y += (targetY - p.y);
             });
+
+            return;
         }
-        
-        // Генерация случайной позиции вне области сборки
-        function getRandomOutsidePosition(w, h, existingPieces, canvasW, canvasH, boardX, boardY, boardW, boardH) {
-            const padding = 20;
-            const margin = 30;
-            
-            // Определяем доступные области
-            const areas = [];
-            
-            // Верхняя область
-            if (boardY - h - margin > padding) {
-                areas.push({
-                    xMin: padding,
-                    xMax: canvasW - w - padding,
-                    yMin: padding,
-                    yMax: boardY - h - margin
-                });
+    }
+}
+
+/* ================= INPUT ================= */
+
+canvas.onmousedown = e=>{
+    if(!gameStarted) return;
+
+    const m = getMouse(e);
+    const piece = getPiece(m);
+
+    if(piece){
+        dragMode = 'piece';
+        selectedPiece = piece;
+
+        const group = getGroup(piece);
+        const base = group[0];
+
+        dragOffsetX = m.x - base.x;
+        dragOffsetY = m.y - base.y;
+
+        pieces = pieces.filter(p => !group.includes(p));
+        pieces.push(...group);
+
+    } else {
+        dragMode = 'canvas';
+    }
+};
+
+window.onmousemove = e=>{
+    if(!gameStarted) return;
+
+    const m = getMouse(e);
+
+    if(dragMode === 'piece' && selectedPiece){
+
+        const group = getGroup(selectedPiece);
+        const base = group[0];
+
+        const nx = m.x - dragOffsetX;
+        const ny = m.y - dragOffsetY;
+
+        const dx = nx - base.x;
+        const dy = ny - base.y;
+
+        group.forEach(p=>{
+            if(!p.fixed){
+                p.x = clamp(p.x + dx, -200, canvas.width + 200);
+                p.y = clamp(p.y + dy, -200, canvas.height + 200);
             }
-            // Нижняя область
-            if (boardY + boardH + margin + h < canvasH - padding) {
-                areas.push({
-                    xMin: padding,
-                    xMax: canvasW - w - padding,
-                    yMin: boardY + boardH + margin,
-                    yMax: canvasH - h - padding
-                });
-            }
-            // Левая область
-            if (boardX - w - margin > padding) {
-                areas.push({
-                    xMin: padding,
-                    xMax: boardX - w - margin,
-                    yMin: boardY,
-                    yMax: boardY + boardH - h
-                });
-            }
-            // Правая область
-            if (boardX + boardW + margin + w < canvasW - padding) {
-                areas.push({
-                    xMin: boardX + boardW + margin,
-                    xMax: canvasW - w - padding,
-                    yMin: boardY,
-                    yMax: boardY + boardH - h
-                });
-            }
-            
-            if (areas.length === 0) {
-                return { x: margin, y: margin };
-            }
-            
-            // Выбираем случайную область
-            const area = areas[Math.floor(Math.random() * areas.length)];
-            const x = area.xMin + Math.random() * (area.xMax - area.xMin);
-            const y = area.yMin + Math.random() * (area.yMax - area.yMin);
-            
-            // Проверяем на пересечение с существующими
-            for (let existing of existingPieces) {
-                if (Math.abs(existing.x - x) < w + 20 && Math.abs(existing.y - y) < h + 20) {
-                    return getRandomOutsidePosition(w, h, existingPieces, canvasW, canvasH, boardX, boardY, boardW, boardH);
-                }
-            }
-            
-            return { x, y };
-        }
-        
-        async function initPuzzle() {
-            loadingSpinner.classList.remove('hidden');
-            
-            try {
-                const piecesInfo = await loadPiecesInfo();
-                console.log(`📦 Загружено ${piecesInfo.length} кусочков`);
-                
-                if (piecesInfo.length === 0) {
-                    throw new Error('Нет данных о кусочках пазла');
-                }
-                
-                // Загружаем изображения
-                const loadedPieces = [];
-                for (let i = 0; i < piecesInfo.length; i++) {
-                    const info = piecesInfo[i];
-                    const img = await loadPieceImage(info.id);
-                    loadedPieces.push({
-                        id: info.id,
-                        img: img,
-                        originalCorrectX: info.correct_x,
-                        originalCorrectY: info.correct_y,
-                        originalW: info.width,
-                        originalH: info.height,
-                        correctX: 0,
-                        correctY: 0,
-                        x: 0, y: 0,
-                        w: 0, h: 0,
-                        fixed: false,
-                        group: null
-                    });
-                }
-                
-                // Находим границы оригинального пазла
-                let minX = Infinity, minY = Infinity;
-                let maxX = -Infinity, maxY = -Infinity;
-                loadedPieces.forEach(p => {
-                    minX = Math.min(minX, p.originalCorrectX);
-                    minY = Math.min(minY, p.originalCorrectY);
-                    maxX = Math.max(maxX, p.originalCorrectX + p.originalW);
-                    maxY = Math.max(maxY, p.originalCorrectY + p.originalH);
-                });
-                
-                const originalPuzzleW = maxX - minX;
-                const originalPuzzleH = maxY - minY;
-                
-                // Вычисляем масштаб
-                const targetScreenSize = Math.min(window.innerWidth, window.innerHeight) * 0.65;
-                const targetPieceSize = 130;
-                const originalPieceSize = loadedPieces[0].originalW;
-                
-                const scaleByScreen = targetScreenSize / Math.max(originalPuzzleW, originalPuzzleH);
-                const scaleByPiece = targetPieceSize / originalPieceSize;
-                globalScale = Math.min(scaleByScreen, scaleByPiece, 1.0);
-                
-                console.log(`📐 Масштаб: ${globalScale.toFixed(3)}`);
-                
-                // Масштабируем
-                pieces = [];
-                let boardMinX = Infinity, boardMinY = Infinity;
-                let boardMaxX = -Infinity, boardMaxY = -Infinity;
-                
-                for (let p of loadedPieces) {
-                    const scaled = {
-                        id: p.id,
-                        img: p.img,
-                        correctX: p.originalCorrectX * globalScale,
-                        correctY: p.originalCorrectY * globalScale,
-                        x: 0, y: 0,
-                        w: p.originalW * globalScale,
-                        h: p.originalH * globalScale,
-                        fixed: false,
-                        group: null
-                    };
-                    pieces.push(scaled);
-                    boardMinX = Math.min(boardMinX, scaled.correctX);
-                    boardMinY = Math.min(boardMinY, scaled.correctY);
-                    boardMaxX = Math.max(boardMaxX, scaled.correctX + scaled.w);
-                    boardMaxY = Math.max(boardMaxY, scaled.correctY + scaled.h);
-                }
-                
-                const boardW = boardMaxX - boardMinX;
-                const boardH = boardMaxY - boardMinY;
-                
-                // Отступы для canvas
-                const margin = Math.max(300, Math.min(500, Math.max(boardW, boardH) * 0.4));
-                const canvasW = boardW + margin * 2;
-                const canvasH = boardH + margin * 2;
-                const boardOffsetX = margin + (canvasW - margin * 2 - boardW) / 2;
-                const boardOffsetY = margin + (canvasH - margin * 2 - boardH) / 2;
-                
-                // Смещаем правильные позиции в центр
-                const offsetX = boardOffsetX - boardMinX;
-                const offsetY = boardOffsetY - boardMinY;
-                
-                pieces.forEach(p => {
-                    p.correctX += offsetX;
-                    p.correctY += offsetY;
-                });
-                
-                // Обновляем границы доски
-                boardRect = {
-                    x: boardOffsetX,
-                    y: boardOffsetY,
-                    w: boardW,
-                    h: boardH
-                };
-                
-                canvas.width = canvasW;
-                canvas.height = canvasH;
-                
-                // Разбрасываем кусочки
-                const scattered = [];
-                for (let p of pieces) {
-                    const pos = getRandomOutsidePosition(p.w, p.h, scattered, canvasW, canvasH, boardRect.x, boardRect.y, boardRect.w, boardRect.h);
-                    p.x = pos.x;
-                    p.y = pos.y;
-                    p.group = null;
-                    scattered.push(p);
-                }
-                
-                console.log(`✅ Загружено ${pieces.length} кусочков`);
-                
-                updateProgress();
-                draw();
-                resetView();
-                gameReady = true;
-                
-            } catch (error) {
-                console.error('Ошибка загрузки пазла:', error);
-                alert('Не удалось загрузить пазл. Пожалуйста, обновите страницу.');
-            } finally {
-                loadingSpinner.classList.add('hidden');
-            }
-        }
-        
-        function draw() {
-            if (!ctx) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Фон
-            ctx.fillStyle = "#1a2418";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Рисуем область сборки
-            ctx.strokeStyle = "rgba(215, 175, 85, 0.5)";
-            ctx.lineWidth = 3;
-            ctx.setLineDash([12, 8]);
-            ctx.strokeRect(boardRect.x - 8, boardRect.y - 8, boardRect.w + 16, boardRect.h + 16);
-            ctx.setLineDash([]);
-            
-            // Тень для области сборки
-            ctx.fillStyle = "rgba(215, 175, 85, 0.05)";
-            ctx.fillRect(boardRect.x - 4, boardRect.y - 4, boardRect.w + 8, boardRect.h + 8);
-            
-            // Рисуем подсказки правильных позиций для незафиксированных
-            for (let p of pieces) {
-                if (!p.fixed && Math.hypot(p.x - p.correctX, p.y - p.correctY) < 100) {
-                    ctx.strokeStyle = "rgba(255, 200, 100, 0.35)";
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([6, 8]);
-                    ctx.strokeRect(p.correctX, p.correctY, p.w, p.h);
-                    ctx.setLineDash([]);
-                }
-            }
-            
-            // Рисуем кусочки
-            for (let p of pieces) {
-                ctx.save();
-                
-                const isSelected = selectedPiece && getGroup(selectedPiece).includes(p);
-                
-                let drawX = p.x, drawY = p.y;
-                
-                if (isSelected && !p.fixed) {
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = "rgba(255, 215, 0, 0.6)";
-                    // Небольшой подъем
-                    drawY -= 4;
-                } else if (p.fixed) {
-                    ctx.shadowBlur = 4;
-                    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
-                } else {
-                    ctx.shadowBlur = 3;
-                    ctx.shadowColor = "rgba(0, 0, 0, 0.2)";
-                }
-                
-                ctx.drawImage(p.img, drawX, drawY, p.w, p.h);
-                ctx.shadowBlur = 0;
-                
-                // Рамка для зафиксированных
-                if (p.fixed) {
-                    ctx.strokeStyle = "#4caf50";
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(drawX, drawY, p.w, p.h);
-                }
-                
-                ctx.restore();
-            }
-        }
-        
-        function checkWin() {
-            const allFixed = pieces.length > 0 && pieces.every(p => p.fixed === true);
-            if (allFixed && gameReady && !winShown) {
-                winShown = true;
-                setTimeout(() => {
-                    winOverlay.classList.add("active");
-                }, 300);
-            }
-        }
-        
-        function getCanvasCoords(clientX, clientY) {
-            const rect = canvas.getBoundingClientRect();
-            return {
-                x: (clientX - rect.left) * (canvas.width / rect.width),
-                y: (clientY - rect.top) * (canvas.height / rect.height)
-            };
-        }
-        
-        function getPieceAt(x, y) {
-            // Идем с конца (верхние)
-            for (let i = pieces.length - 1; i >= 0; i--) {
-                const p = pieces[i];
-                if (p.fixed) continue;
-                if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
-                    return p;
-                }
-            }
-            return null;
-        }
-        
-        function onPointerDown(e) {
-            e.preventDefault();
-            if (!gameReady) return;
-            
-            const clientX = e.clientX ?? e.touches?.[0]?.clientX;
-            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
-            if (!clientX || !clientY) return;
-            
-            const coords = getCanvasCoords(clientX, clientY);
-            const piece = getPieceAt(coords.x, coords.y);
-            
-            if (piece && !piece.fixed) {
-                selectedPiece = piece;
-                const group = getGroup(piece);
-                selectedGroupPieces = [...group];
-                
-                // Находим опорную точку для перетаскивания
-                const firstPiece = group[0];
-                dragOffsetX = coords.x - firstPiece.x;
-                dragOffsetY = coords.y - firstPiece.y;
-                dragStartGroupPos = { x: firstPiece.x, y: firstPiece.y };
-                return;
-            }
-            
-            // Перетаскивание холста
-            isDraggingWrapper = true;
-            wrapperDragStart.x = clientX - panX;
-            wrapperDragStart.y = clientY - panY;
-        }
-        
-        function onPointerMove(e) {
-            if (!gameReady) return;
-            
-            const clientX = e.clientX ?? e.touches?.[0]?.clientX;
-            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
-            if (!clientX || !clientY) return;
-            
-            if (selectedPiece && !selectedPiece.fixed) {
-                const coords = getCanvasCoords(clientX, clientY);
-                const group = getGroup(selectedPiece);
-                const firstPiece = group[0];
-                
-                const newX = coords.x - dragOffsetX;
-                const newY = coords.y - dragOffsetY;
-                const deltaX = newX - firstPiece.x;
-                const deltaY = newY - firstPiece.y;
-                
-                for (let p of group) {
-                    if (!p.fixed) {
-                        p.x += deltaX;
-                        p.y += deltaY;
-                    }
-                }
-                draw();
-                return;
-            }
-            
-            if (isDraggingWrapper) {
-                panX = clientX - wrapperDragStart.x;
-                panY = clientY - wrapperDragStart.y;
-                wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
-            }
-        }
-        
-        function onPointerUp(e) {
-            if (!gameReady) return;
-            
-            if (selectedPiece && !selectedPiece.fixed) {
-                const group = getGroup(selectedPiece);
-                
-                // Сначала проверяем магнит к правильному месту
-                let snapped = false;
-                for (let p of group) {
-                    if (trySnapToCorrect(p)) {
-                        snapped = true;
-                        break;
-                    }
-                }
-                
-                // Если не примагнитились, проверяем объединения с другими группами
-                if (!snapped) {
-                    checkAllMerges();
-                    
-                    // Дополнительная проверка: если группа не зафиксирована, проверяем магнит к любой правильной позиции
-                    if (!group[0].fixed) {
-                        for (let p of group) {
-                            const distToCorrect = Math.hypot(p.x - p.correctX, p.y - p.correctY);
-                            if (distToCorrect < SNAP_DISTANCE) {
-                                snapGroupToCorrect(group, null);
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                selectedPiece = null;
-                selectedGroupPieces = [];
-                draw();
-                updateProgress();
-            }
-            
-            isDraggingWrapper = false;
-        }
-        
-        function onWheel(e) {
-            e.preventDefault();
-            const delta = e.deltaY > 0 ? -0.1 : 0.1;
-            const oldScale = scale;
-            scale = Math.min(Math.max(0.3, scale + delta), 2.5);
-            
-            const rect = wrapper.getBoundingClientRect();
-            const centerX = window.innerWidth / 2;
-            const centerY = window.innerHeight / 2;
-            
-            panX = centerX - (centerX - panX) * (scale / oldScale);
-            panY = centerY - (centerY - panY) * (scale / oldScale);
-            
-            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
-        }
-        
-        function zoom(delta) {
-            const oldScale = scale;
-            scale = Math.min(Math.max(0.3, scale + delta), 2.5);
-            
-            const centerX = window.innerWidth / 2;
-            const centerY = window.innerHeight / 2;
-            
-            panX = centerX - (centerX - panX) * (scale / oldScale);
-            panY = centerY - (centerY - panY) * (scale / oldScale);
-            
-            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
-        }
-        
-        function resetView() {
-            if (!pieces.length) return;
-            
-            let minX = Infinity, minY = Infinity;
-            let maxX = -Infinity, maxY = -Infinity;
-            pieces.forEach(p => {
-                minX = Math.min(minX, p.x, p.correctX);
-                minY = Math.min(minY, p.y, p.correctY);
-                maxX = Math.max(maxX, p.x + p.w, p.correctX + p.w);
-                maxY = Math.max(maxY, p.y + p.h, p.correctY + p.h);
-            });
-            
-            const contentW = maxX - minX;
-            const contentH = maxY - minY;
-            const viewW = window.innerWidth * 0.85;
-            const viewH = window.innerHeight * 0.85;
-            
-            scale = Math.min(viewW / contentW, viewH / contentH, 1.2);
-            
-            const centerX = (minX + maxX) / 2;
-            const centerY = (minY + maxY) / 2;
-            
-            panX = window.innerWidth / 2 - centerX * scale;
-            panY = window.innerHeight / 2 - centerY * scale;
-            
-            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
-        }
-        
-        function closeWin() {
-            winOverlay.classList.remove("active");
-        }
-        
-        // Инициализация и обработчики
-        initPuzzle();
-        
-        document.getElementById('closeWinBtn').onclick = closeWin;
-        zoomInBtn.onclick = () => zoom(0.15);
-        zoomOutBtn.onclick = () => zoom(-0.15);
-        resetViewBtn.onclick = () => resetView();
-        
-        canvas.addEventListener('mousedown', onPointerDown);
-        window.addEventListener('mousemove', onPointerMove);
-        window.addEventListener('mouseup', onPointerUp);
-        window.addEventListener('wheel', onWheel, { passive: false });
-        
-        canvas.addEventListener('touchstart', onPointerDown, { passive: false });
-        canvas.addEventListener('touchmove', onPointerMove, { passive: false });
-        canvas.addEventListener('touchend', onPointerUp);
-        
-        console.log('🎯 Puzzle page ready, puzzle_id:', PUZZLE_ID);
-    })();
+        });
+    }
+
+    if(dragMode === 'canvas'){
+        panX += e.movementX;
+        panY += e.movementY;
+        updateTransform();
+    }
+};
+
+window.onmouseup = ()=>{
+    if(selectedPiece){
+        getGroup(selectedPiece).forEach(trySnap);
+    }
+    selectedPiece = null;
+    dragMode = null;
+};
+
+/* ================= CAMERA ================= */
+
+function updateTransform(){
+    wrapper.style.transform =
+        `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
+}
+
+window.onwheel = e=>{
+    e.preventDefault();
+    scale = clamp(scale + (e.deltaY>0?-0.1:0.1), 0.4, 2.5);
+    updateTransform();
+};
+
+function resetView(){
+    scale = 1;
+    panX = 0;
+    panY = 0;
+    updateTransform();
+}
+
+/* ================= LOOP ================= */
+
+function loop(){
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ================= WIN ================= */
+
+function checkWin(){
+    if(pieces.every(p => p.fixed)){
+        document.getElementById('winOverlay').classList.remove('hidden');
+    }
+}
+
+/* ================= START ================= */
+
+document.getElementById('startBtn').onclick = async ()=>{
+    if(gameStarted) return;
+
+    await initPuzzle();
+    gameStarted = true;
+
+    document.getElementById('overlay').classList.add('hidden');
+    document.getElementById('game').classList.remove('hidden');
+};
+
+})();
 </script>
+
 </body>
 </html>
