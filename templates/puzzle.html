@@ -2,541 +2,1105 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>🎁 Собери пазл</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a231a;
-            min-height: 100vh;
-            overflow: hidden;
+        * {
+            user-select: none;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
-        #gameContainer {
+        
+        body {
+            font-family: 'Segoe UI', 'Georgia', 'Times New Roman', serif;
+            overflow: hidden;
+            height: 100vh;
+            background: #0a0c12;
+            touch-action: none;
+        }
+        
+        .overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.2s ease;
+            background-image: url('/static/opening.jpg');
+            background-size: cover;
+            background-position: center;
+            background-blend-mode: overlay;
+        }
+        
+        .overlay::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+            z-index: -1;
+        }
+        
+        .invite-text {
+            font-size: 1.3rem;
+            text-align: center;
+            max-width: 600px;
+            margin: 20px;
+            margin-bottom: 40px;
+            color: #ecd9b4;
+            text-shadow: 0 2px 8px black;
+            background: rgba(0, 0, 0, 0.55);
+            padding: 18px 32px;
+            border-radius: 80px;
+            backdrop-filter: blur(8px);
+            border: 1px solid #b88b4b;
+            font-style: italic;
+        }
+        
+        .compass-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: 0.3s;
+            filter: drop-shadow(0 0 8px #c9a458);
+        }
+        
+        .compass-btn svg {
+            width: 135px;
+            height: 135px;
+            transition: 0.2s;
+        }
+        
+        .compass-btn:hover svg {
+            transform: rotate(15deg) scale(1.05);
+            filter: drop-shadow(0 0 15px #f3c26b);
+        }
+        
+        .compass-btn:active svg {
+            transform: scale(0.96);
+        }
+        
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
             overflow: hidden;
+            background: #0b100e;
         }
-        #puzzleBoard {
+        
+        .puzzle-wrapper {
             position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s ease-out;
             cursor: grab;
         }
-        #puzzleBoard:active { cursor: grabbing; }
-        .puzzle-piece {
-            position: absolute;
+        
+        .puzzle-wrapper:active {
+            cursor: grabbing;
+        }
+        
+        canvas {
+            display: block;
+            box-shadow: 0 0 0 3px #7a5a3a, 0 20px 40px black;
+            border-radius: 20px;
+            background: #1e2a1f;
             cursor: grab;
-            transition: filter 0.2s;
-            filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.3));
         }
-        .puzzle-piece:active { cursor: grabbing; filter: drop-shadow(4px 4px 8px rgba(0,0,0,0.4)); }
-        .puzzle-piece.placed { 
-            filter: drop-shadow(0 0 0 rgba(0,0,0,0)); 
-            opacity: 0.9;
-            pointer-events: none;
+        
+        canvas:active {
+            cursor: grabbing;
         }
-        .header {
+        
+        .progress-bar-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 30px;
+            padding: 6px;
+            backdrop-filter: blur(8px);
+            border: 1px solid #dba551;
+            z-index: 45;
+        }
+        
+        .progress-bar {
+            height: 14px;
+            background: linear-gradient(90deg, #e6b85e, #f5d48a);
+            border-radius: 30px;
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 8px #ffd27a;
+        }
+        
+        .progress-text {
+            position: fixed;
+            bottom: 50px;
+            left: 20px;
+            color: #ffefcf;
+            font-size: 0.8rem;
+            text-shadow: 0 1px 2px black;
+            z-index: 45;
+            background: rgba(0,0,0,0.5);
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 50;
+        }
+        
+        .control-btn {
+            background: #1f1a10cc;
+            backdrop-filter: blur(12px);
+            border-radius: 50px;
+            padding: 10px 20px;
+            border: 1px solid #e2b870;
+            cursor: pointer;
+            color: #ffefcf;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        
+        .music-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 130px;
+            background: #1f1a10cc;
+            backdrop-filter: blur(12px);
+            border-radius: 50px;
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            z-index: 50;
+            border: 1px solid #e2b870;
+            cursor: pointer;
+            color: #ffefcf;
+            font-weight: bold;
+        }
+        
+        .win-overlay {
             position: fixed;
             top: 0;
             left: 0;
-            right: 0;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px 20px;
-            z-index: 1000;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        .header h1 { font-size: 24px; color: #333; margin-bottom: 5px; }
-        .header p { color: #666; font-size: 14px; }
-        .progress-container {
-            position: fixed;
-            top: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 10px 25px;
-            border-radius: 30px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .progress-bar {
-            width: 200px;
-            height: 12px;
-            background: #e0e0e0;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .progress-fill {
+            width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            width: 0%;
-            transition: width 0.3s ease;
+            z-index: 200;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.8s ease;
         }
-        .progress-text { font-weight: 600; color: #333; min-width: 80px; }
-        .gift-block {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            z-index: 2000;
+        
+        .win-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .win-video-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -2;
+            filter: brightness(0.4) sepia(0.2);
+        }
+        
+        .win-content {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            border-radius: 70px;
+            padding: 35px 50px;
             text-align: center;
-            max-width: 90%;
-            width: 500px;
-            animation: slideIn 0.5s ease;
+            border: 2px solid #e8c28e;
+            box-shadow: 0 0 70px rgba(210, 160, 70, 0.4);
+            animation: flashWin 0.6s ease-out;
+            max-width: 650px;
+            margin: 20px;
         }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translate(-50%, -40%); }
-            to { opacity: 1; transform: translate(-50%, -50%); }
+        
+        @keyframes flashWin {
+            0% { transform: scale(0.7); opacity: 0; }
+            50% { transform: scale(1.02); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
         }
-        .gift-block h2 { color: #667eea; font-size: 32px; margin-bottom: 20px; }
-        .gift-block p { color: #666; margin-bottom: 15px; font-size: 16px; }
-        .gift-icon { font-size: 80px; margin-bottom: 20px; }
-        .download-btn {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 15px 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 30px;
-            font-weight: 600;
-            transition: transform 0.2s;
+        
+        .win-content h2 {
+            font-size: 2.5rem;
+            color: #FFF5E0;
+            text-shadow: 0 3px 8px black;
+            margin-bottom: 20px;
         }
-        .download-btn:hover { transform: scale(1.05); }
-        .instructions {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.9);
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            color: #666;
-            z-index: 1000;
+        
+        .win-content p {
+            font-size: 1.3rem;
+            color: #FFF5E0;
+            margin: 12px 0;
         }
-        .loading {
+        
+        .ticket-info {
+            background: #0a0705aa;
+            border-radius: 40px;
+            padding: 18px 20px;
+            margin: 20px 0;
+            font-size: 1.15rem;
+            border: 1px solid #e8bc7a;
+            color: #FFF2D7;
+            line-height: 1.7;
+        }
+        
+        .win-content button {
+            background: #6a3e1a;
+            border: none;
+            padding: 14px 32px;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            color: #FFF2D7;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 10px;
+            font-weight: bold;
+            border: 1px solid #e8bc7a;
+        }
+        
+        .win-content button:hover {
+            background: #9b5e2c;
+            transform: scale(1.02);
+        }
+        
+        .violin-icon {
+            font-size: 3rem;
+            filter: drop-shadow(0 0 6px gold);
+            margin-bottom: 8px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .loading-spinner {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
             color: white;
-            padding: 20px 40px;
+            font-size: 1.2rem;
+            background: rgba(0,0,0,0.7);
+            padding: 20px;
             border-radius: 10px;
-            font-size: 18px;
-            z-index: 3000;
+            z-index: 300;
+        }
+        
+        @media (max-width: 768px) {
+            .cursor-particle {
+                display: none;
+            }
+            .controls {
+                bottom: 80px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="loading" id="loading">Загрузка пазла...</div>
-    <div id="gameContainer">
-        <div id="puzzleBoard"></div>
-    </div>
 
-    <div class="header">
-        <h1>🎁 Собери пазл</h1>
-        <p>Дорогая, я знаю, как ты любишь пазлы, поэтому я подготовил тебе задачку! 😜</p>
+<div class="overlay" id="overlay">
+    <div class="invite-text">
+        Дорогая, я знаю, как ты любишь пазлы,<br>
+        поэтому я подготовил тебе задачку, чтобы получить свой подарок! 😜
     </div>
+    <button class="compass-btn" id="startBtn">
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#2c2416" stroke="#d4af5a" stroke-width="2"/>
+            <circle cx="50" cy="50" r="38" fill="#1e1910" stroke="#b8924b" stroke-width="1.5"/>
+            <polygon points="50,15 58,45 50,85 42,45" fill="#d6a447" opacity="0.9"/>
+            <polygon points="50,15 42,45 50,85 58,45" fill="#a5722e" opacity="0.8"/>
+            <circle cx="50" cy="45" r="8" fill="#ffde9e" stroke="#8b5a2b" stroke-width="1.5"/>
+            <text x="50" y="32" text-anchor="middle" fill="#ecc87b" font-size="10" font-weight="bold">N</text>
+            <text x="50" y="70" text-anchor="middle" fill="#ecc87b" font-size="8">S</text>
+        </svg>
+    </button>
+</div>
 
-    <div class="progress-container">
-        <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
-        <div class="progress-text" id="progressText">Собрано 0 / 50</div>
-        <span>🎻</span>
+<div id="game" class="hidden">
+    <div class="game-container">
+        <div class="puzzle-wrapper" id="puzzleWrapper">
+            <canvas id="puzzleCanvas"></canvas>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="progress-text" id="progressText">Собрано 0 / 0</div>
+        <div class="controls">
+            <button class="control-btn" id="zoomOutBtn">−</button>
+            <button class="control-btn" id="zoomInBtn">+</button>
+            <button class="control-btn" id="resetViewBtn">⊙</button>
+        </div>
     </div>
+</div>
 
-    <div class="instructions">
-        🖱️ Перетаскивай пазлы • Колёсико — зум • Пустое место — панорама
-    </div>
-
-    <div class="gift-block" id="giftBlock">
-        <div class="gift-icon">🎂</div>
-        <h2>С днём рождения, любимая!</h2>
+<div id="winOverlay" class="win-overlay">
+    <video id="winVideo" class="win-video-bg" autoplay loop muted playsinline>
+        <source src="/static/background.mp4" type="video/mp4">
+    </video>
+    <div class="win-content">
+        <div class="violin-icon">🎻</div>
+        <h2>🎂 С днём рождения, любимая!</h2>
         <p>Ты собрала пазл — а вот и подарок:</p>
-        <p><strong>🎁 Твой билет на концерт!</strong></p>
-        <a href="/download/{{ puzzle_id }}" class="download-btn" download>📎 Скачать билет</a>
+        <div class="ticket-info">
+            🎁 Твой билет на концерт!<br>
+            📅 С нетерпением жду этого вечера с тобой!
+        </div>
+        <button id="downloadTicketBtn">📎 Скачать билет</button>
     </div>
+</div>
 
-    <script>
-    // ==================== ГЕНЕРАЦИЯ ФОРМ ПАЗЛОВ ====================
-    function createPuzzleShape(pieceWidth, pieceHeight, tabSize, edge) {
-        // edge: {top: 1/-1/0, right: 1/-1/0, bottom: 1/-1/0, left: 1/-1/0}
-        // 1 = выступ, -1 = выемка, 0 = край
-        const w = pieceWidth;
-        const h = pieceHeight;
-        const t = tabSize;
+<button id="musicToggle" class="music-btn hidden">🔇 Выключить музыку</button>
+
+<div id="loadingSpinner" class="loading-spinner hidden">Загрузка пазла... 🧩</div>
+
+<script>
+    const PUZZLE_ID = '{{ puzzle_id }}';
+    
+    (function(){
+        let pieces = [];
+        let selectedPiece = null;
+        let dragOffsetX = 0, dragOffsetY = 0;
         
-        let path = '';
+        let canvas = document.getElementById('puzzleCanvas');
+        let ctx = canvas.getContext('2d');
         
-        // Top edge
-        if (edge.top === 0) {
-            path += `M 0,0 L ${w},0`;
-        } else {
-            const dir = edge.top;
-            path += `M 0,0 `;
-            path += `L ${w/2 - t},0 `;
-            path += `C ${w/2 - t},${-dir*t*0.3} ${w/2 - t},${-dir*t} ${w/2},${-dir*t} `;
-            path += `C ${w/2 + t},${-dir*t} ${w/2 + t},${-dir*t*0.3} ${w/2 + t},0 `;
-            path += `L ${w},0`;
-        }
+        let gameStarted = false;
+        let winShown = false;
         
-        // Right edge
-        if (edge.right === 0) {
-            path += ` L ${w},${h}`;
-        } else {
-            const dir = edge.right;
-            path += ` L ${w},${h/2 - t}`;
-            path += `C ${w + dir*t*0.3},${h/2 - t} ${w + dir*t},${h/2 - t} ${w + dir*t},${h/2} `;
-            path += `C ${w + dir*t},${h/2 + t} ${w + dir*t*0.3},${h/2 + t} ${w},${h/2 + t} `;
-            path += `L ${w},${h}`;
-        }
+        let scale = 1;
+        let panX = 0, panY = 0;
+        let wrapper = document.getElementById('puzzleWrapper');
+        let isDraggingWrapper = false;
+        let wrapperDragStart = {x:0, y:0};
         
-        // Bottom edge
-        if (edge.bottom === 0) {
-            path += ` L 0,${h}`;
-        } else {
-            const dir = edge.bottom;
-            path += ` L ${w/2 + t},${h}`;
-            path += `C ${w/2 + t},${h + dir*t*0.3} ${w/2 + t},${h + dir*t} ${w/2},${h + dir*t} `;
-            path += `C ${w/2 - t},${h + dir*t} ${w/2 - t},${h + dir*t*0.3} ${w/2 - t},${h} `;
-            path += `L 0,${h}`;
-        }
+        let audio = new Audio("/static/music.mp3");
+        audio.loop = true;
+        audio.volume = 0.35;
         
-        // Left edge
-        if (edge.left === 0) {
-            path += ` Z`;
-        } else {
-            const dir = edge.left;
-            path += ` L 0,${h/2 + t}`;
-            path += `C ${0 + dir*t*0.3},${h/2 + t} ${0 + dir*t},${h/2 + t} ${0 + dir*t},${h/2} `;
-            path += `C ${0 + dir*t},${h/2 - t} ${0 + dir*t*0.3},${h/2 - t} ${0},${h/2 - t} `;
-            path += `Z`;
+        const overlay = document.getElementById('overlay');
+        const gameDiv = document.getElementById('game');
+        const winOverlay = document.getElementById('winOverlay');
+        const startBtn = document.getElementById('startBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const musicToggle = document.getElementById('musicToggle');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const resetViewBtn = document.getElementById('resetViewBtn');
+        let audioEnabled = true;
+        
+        // Глобальный масштаб для кусочков
+        let globalScale = 1;
+        
+        function updateProgress() {
+            const fixedCount = pieces.filter(p => p.fixed === true).length;
+            const total = pieces.length;
+            const percent = (fixedCount / total) * 100;
+            if(progressBar) progressBar.style.width = `${percent}%`;
+            if(progressText) progressText.innerHTML = `Собрано ${fixedCount} / ${total}`;
+            checkWin();
         }
         
-        return path;
-    }
-
-    function getRandomEdge(isEdge, neighborExists) {
-        if (!neighborExists) return 0; // край доски
-        if (!isEdge) return Math.random() > 0.5 ? 1 : -1;
-        return 0;
-    }
-
-    // ==================== PUZZLE GAME ====================
-    class PuzzleGame {
-        constructor(containerId, imageUrl, rows = 5, cols = 10) {
-            this.container = document.getElementById(containerId);
-            this.board = document.getElementById('puzzleBoard');
-            this.imageUrl = imageUrl;
-            this.rows = rows;
-            this.cols = cols;
-            this.pieces = [];
-            this.placedCount = 0;
-            this.totalPieces = rows * cols;
-            this.boardWidth = 0;
-            this.boardHeight = 0;
-            this.pieceWidth = 0;
-            this.pieceHeight = 0;
-            this.tabSize = 0;
-            this.camera = { x: 0, y: 0, scale: 1 };
-            this.dragging = null;
-            this.dragOffset = { x: 0, y: 0 };
-            this.isPanning = false;
-            this.lastPointer = { x: 0, y: 0 };
-            this.image = null;
-            this.svgDefs = null;
-
-            this.init();
-        }
-
-        async init() {
-            this.setupCamera();
-            this.bindEvents();
-
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.src = this.imageUrl;
+        function animateSnap(piece, targetX, targetY, callback) {
+            const startX = piece.x;
+            const startY = piece.y;
+            const duration = 150;
+            const startTime = performance.now();
             
-            await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = () => reject(new Error('Не удалось загрузить изображение'));
-            });
-            
-            this.image = img;
-            this.setupDimensions();
-            this.createSVGDefs();
-            this.createPieces();
-            this.scatterPieces();
-            
-            document.getElementById('loading').style.display = 'none';
-            this.render();
-        }
-
-        setupDimensions() {
-            const maxWidth = Math.min(window.innerWidth * 0.9, 1200);
-            const maxHeight = window.innerHeight * 0.7;
-            
-            const scale = Math.min(
-                maxWidth / this.image.width,
-                maxHeight / this.image.height,
-                1
-            );
-            
-            this.boardWidth = this.image.width * scale;
-            this.boardHeight = this.image.height * scale;
-            this.pieceWidth = this.boardWidth / this.cols;
-            this.pieceHeight = this.boardHeight / this.rows;
-            this.tabSize = Math.min(this.pieceWidth, this.pieceHeight) * 0.25;
-            
-            this.board.style.width = `${this.boardWidth}px`;
-            this.board.style.height = `${this.boardHeight}px`;
-        }
-
-        setupCamera() {
-            this.camera.x = window.innerWidth / 2;
-            this.camera.y = window.innerHeight / 2;
-            this.camera.scale = 1;
-        }
-
-        createSVGDefs() {
-            const svgNS = "http://www.w3.org/2000/svg";
-            const svg = document.createElementNS(svgNS, "svg");
-            svg.style.position = "absolute";
-            svg.style.width = "100%";
-            svg.style.height = "100%";
-            svg.style.pointerEvents = "none";
-            this.board.appendChild(svg);
-            
-            this.svgDefs = svg;
-        }
-
-        createPieces() {
-            this.pieces = [];
-            const svgNS = "http://www.w3.org/2000/svg";
-
-            for (let r = 0; r < this.rows; r++) {
-                for (let c = 0; c < this.cols; c++) {
-                    const edge = {
-                        top: r === 0 ? 0 : (Math.random() > 0.5 ? 1 : -1),
-                        right: c === this.cols - 1 ? 0 : (Math.random() > 0.5 ? 1 : -1),
-                        bottom: r === this.rows - 1 ? 0 : (Math.random() > 0.5 ? 1 : -1),
-                        left: c === 0 ? 0 : (Math.random() > 0.5 ? 1 : -1)
-                    };
-
-                    // Корректируем соседние края
-                    if (r > 0) {
-                        const abovePiece = this.pieces.find(p => p.row === r - 1 && p.col === c);
-                        if (abovePiece) {
-                            edge.top = -abovePiece.edge.bottom;
-                        }
-                    }
-                    if (c > 0) {
-                        const leftPiece = this.pieces.find(p => p.row === r && p.col === c - 1);
-                        if (leftPiece) {
-                            edge.left = -leftPiece.edge.right;
-                        }
-                    }
-
-                    const pathData = createPuzzleShape(this.pieceWidth, this.pieceHeight, this.tabSize, edge);
-                    
-                    const g = document.createElementNS(svgNS, "g");
-                    g.classList.add("puzzle-piece");
-                    g.setAttribute("data-id", `${c}-${r}`);
-                    
-                    // Clip path для изображения
-                    const clipPath = document.createElementNS(svgNS, "clipPath");
-                    const clipId = `clip-${c}-${r}`;
-                    clipPath.setAttribute("id", clipId);
-                    
-                    const clipPathEl = document.createElementNS(svgNS, "path");
-                    clipPathEl.setAttribute("d", pathData);
-                    clipPath.appendChild(clipPathEl);
-                    
-                    // Изображение
-                    const img = document.createElementNS(svgNS, "image");
-                    img.setAttribute("href", this.imageUrl);
-                    img.setAttribute("width", this.image.width);
-                    img.setAttribute("height", this.image.height);
-                    img.setAttribute("clip-path", `url(#${clipId})`);
-                    img.setAttribute("x", -c * this.pieceWidth * (this.image.width / this.boardWidth));
-                    img.setAttribute("y", -r * this.pieceHeight * (this.image.height / this.boardHeight));
-                    img.setAttribute("style", `width: ${this.image.width}px; height: ${this.image.height}px`);
-                    
-                    // Граница пазла
-                    const path = document.createElementNS(svgNS, "path");
-                    path.setAttribute("d", pathData);
-                    path.setAttribute("fill", "none");
-                    path.setAttribute("stroke", "rgba(0,0,0,0.3)");
-                    path.setAttribute("stroke-width", "1");
-                    
-                    g.appendChild(clipPath);
-                    g.appendChild(img);
-                    g.appendChild(path);
-                    this.svgDefs.appendChild(clipPath);
-                    
-                    const piece = {
-                        element: g,
-                        id: `${c}-${r}`,
-                        row: r,
-                        col: c,
-                        targetX: c * this.pieceWidth,
-                        targetY: r * this.pieceHeight,
-                        x: 0,
-                        y: 0,
-                        edge: edge,
-                        isPlaced: false,
-                        zIndex: Math.random()
-                    };
-                    
-                    this.pieces.push(piece);
-                    this.board.appendChild(g);
-                    
-                    // Drag events
-                    g.addEventListener("mousedown", (e) => this.onPieceMouseDown(e, piece));
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(1, elapsed / duration);
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                piece.x = startX + (targetX - startX) * easeProgress;
+                piece.y = startY + (targetY - startY) * easeProgress;
+                draw();
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    piece.x = targetX;
+                    piece.y = targetY;
+                    if (callback) callback();
+                    draw();
+                    updateProgress();
                 }
             }
+            requestAnimationFrame(animate);
         }
-
-        scatterPieces() {
-            const margin = 100;
-            this.pieces.forEach(p => {
-                p.x = (Math.random() - 0.5) * (this.boardWidth + margin * 2);
-                p.y = (Math.random() - 0.5) * (this.boardHeight + margin * 2);
-                this.updatePiecePosition(p);
-            });
-        }
-
-        updatePiecePosition(piece) {
-            piece.element.style.transform = `translate(${piece.x}px, ${piece.y}px)`;
-            piece.element.style.zIndex = Math.floor(piece.zIndex);
-        }
-
-        onPieceMouseDown(e, piece) {
-            if (piece.isPlaced) return;
-            e.preventDefault();
-            e.stopPropagation();
+        
+        function trySnapToCorrect(piece){
+            const snapDistance = 50;
+            if(piece.fixed) return false;
             
-            this.dragging = piece;
-            const rect = this.board.getBoundingClientRect();
-            this.dragOffset = {
-                x: e.clientX - rect.left - piece.x,
-                y: e.clientY - rect.top - piece.y
-            };
-            piece.zIndex = this.pieces.length + 1;
-            this.updatePiecePosition(piece);
+            const group = piece.group || [piece];
+            
+            // Проверяем, близко ли вся группа к своим правильным позициям
+            let allNearCorrect = true;
+            let avgOffsetX = 0, avgOffsetY = 0;
+            
+            group.forEach(p => {
+                const dx = p.x - p.correctX;
+                const dy = p.y - p.correctY;
+                avgOffsetX += dx;
+                avgOffsetY += dy;
+                if(Math.hypot(dx, dy) >= snapDistance) allNearCorrect = false;
+            });
+            
+            avgOffsetX /= group.length;
+            avgOffsetY /= group.length;
+            
+            if(allNearCorrect || (Math.abs(avgOffsetX) < snapDistance && Math.abs(avgOffsetY) < snapDistance)){
+                let completed = 0;
+                group.forEach(p => {
+                    animateSnap(p, p.correctX, p.correctY, () => {
+                        completed++;
+                        if(completed === group.length) {
+                            group.forEach(piece => { piece.fixed = true; });
+                            updateProgress();
+                            draw();
+                        }
+                    });
+                });
+                return true;
+            }
+            return false;
         }
-
-        bindEvents() {
-            window.addEventListener("mousemove", (e) => {
-                if (this.dragging) {
-                    const rect = this.board.getBoundingClientRect();
-                    this.dragging.x = e.clientX - rect.left - this.dragOffset.x;
-                    this.dragging.y = e.clientY - rect.top - this.dragOffset.y;
-                    this.updatePiecePosition(this.dragging);
-                } else if (this.isPanning) {
-                    const dx = e.clientX - this.lastPointer.x;
-                    const dy = e.clientY - this.lastPointer.y;
-                    this.board.style.left = `${parseFloat(this.board.style.left || 0) + dx}px`;
-                    this.board.style.top = `${parseFloat(this.board.style.top || 0) + dy}px`;
-                    this.lastPointer = { x: e.clientX, y: e.clientY };
-                }
+        
+        function trySnapPieces(pieceA, pieceB) {
+            if(pieceA.group === pieceB.group) return false;
+            if(pieceA.fixed || pieceB.fixed) return false;
+            
+            // Проверяем, должны ли эти кусочки соприкасаться
+            const dx = (pieceA.x + pieceA.w/2) - (pieceB.x + pieceB.w/2);
+            const dy = (pieceA.y + pieceA.h/2) - (pieceB.y + pieceB.h/2);
+            const correctDx = (pieceA.correctX + pieceA.w/2) - (pieceB.correctX + pieceB.w/2);
+            const correctDy = (pieceA.correctY + pieceA.h/2) - (pieceB.correctY + pieceB.h/2);
+            
+            const tolerance = 60;
+            
+            if(Math.abs(dx - correctDx) < tolerance && Math.abs(dy - correctDy) < tolerance) {
+                // Объединяем группы
+                const groupA = pieceA.group || [pieceA];
+                const groupB = pieceB.group || [pieceB];
+                const merged = [...new Set([...groupA, ...groupB])];
+                
+                // Выравниваем всю группу
+                const rootPiece = merged[0];
+                const rootCorrectX = rootPiece.correctX;
+                const rootCorrectY = rootPiece.correctY;
+                
+                merged.forEach(p => {
+                    p.x = p.correctX + (rootPiece.x - rootCorrectX);
+                    p.y = p.correctY + (rootPiece.y - rootCorrectY);
+                    p.group = merged;
+                });
+                
+                draw();
+                updateProgress();
+                return true;
+            }
+            return false;
+        }
+        
+        async function loadPiecesInfo() {
+            const response = await fetch(`/pieces-info/${PUZZLE_ID}`);
+            if (!response.ok) throw new Error('Не удалось загрузить информацию о пазле');
+            return await response.json();
+        }
+        
+        function loadPieceImage(pieceId) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = `/piece/${PUZZLE_ID}/${pieceId}`;
             });
-
-            window.addEventListener("mouseup", () => {
-                if (this.dragging) {
-                    this.checkSnap(this.dragging);
-                    this.dragging = null;
+        }
+        
+        // Функция для разбрасывания кусочков
+        function getRandomPositionOutside(w, h, existingPieces, canvasW, canvasH, boardOffsetX, boardOffsetY, boardW, boardH) {
+            const padding = 30;
+            const positions = [];
+            
+            // Верхняя область
+            for(let x = padding; x < canvasW - w - padding; x += w + 20) {
+                for(let y = padding; y < boardOffsetY - h - padding; y += h + 20) {
+                    positions.push({x, y});
                 }
-                this.isPanning = false;
-            });
-
-            this.board.addEventListener("mousedown", (e) => {
-                if (e.target === this.board || e.target.tagName === "svg") {
-                    this.isPanning = true;
-                    this.lastPointer = { x: e.clientX, y: e.clientY };
+            }
+            // Нижняя область
+            for(let x = padding; x < canvasW - w - padding; x += w + 20) {
+                for(let y = boardOffsetY + boardH + padding; y < canvasH - h - padding; y += h + 20) {
+                    positions.push({x, y});
                 }
+            }
+            // Левая область
+            for(let y = boardOffsetY; y < boardOffsetY + boardH; y += h + 20) {
+                for(let x = padding; x < boardOffsetX - w - padding; x += w + 20) {
+                    positions.push({x, y});
+                }
+            }
+            // Правая область
+            for(let y = boardOffsetY; y < boardOffsetY + boardH; y += h + 20) {
+                for(let x = boardOffsetX + boardW + padding; x < canvasW - w - padding; x += w + 20) {
+                    positions.push({x, y});
+                }
+            }
+            
+            // Перемешиваем
+            for(let i = positions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [positions[i], positions[j]] = [positions[j], positions[i]];
+            }
+            
+            // Ищем свободное место
+            for(let pos of positions) {
+                let overlapping = false;
+                for(let p of existingPieces) {
+                    if(Math.abs(p.x - pos.x) < w + 20 && Math.abs(p.y - pos.y) < h + 20) {
+                        overlapping = true;
+                        break;
+                    }
+                }
+                if(!overlapping) return pos;
+            }
+            
+            // Если не нашли - кладём в угол
+            return { x: padding, y: padding };
+        }
+        
+        async function initPuzzle(){
+            loadingSpinner.classList.remove('hidden');
+            
+            try {
+                const piecesInfo = await loadPiecesInfo();
+                console.log(`📦 Загружено ${piecesInfo.length} кусочков`);
+                
+                if(piecesInfo.length === 0) {
+                    throw new Error('Нет данных о кусочках пазла');
+                }
+                
+                // Загружаем все кусочки
+                const loadedPieces = [];
+                for(let i = 0; i < piecesInfo.length; i++) {
+                    const info = piecesInfo[i];
+                    const img = await loadPieceImage(info.id);
+                    loadedPieces.push({
+                        id: info.id,
+                        img: img,
+                        originalCorrectX: info.correct_x,
+                        originalCorrectY: info.correct_y,
+                        originalW: info.width,
+                        originalH: info.height,
+                        correctX: 0,
+                        correctY: 0,
+                        x: 0, y: 0,
+                        w: 0, h: 0,
+                        fixed: false,
+                        group: null
+                    });
+                }
+                
+                // Находим границы оригинального пазла
+                let minX = Infinity, minY = Infinity;
+                let maxX = -Infinity, maxY = -Infinity;
+                loadedPieces.forEach(p => {
+                    minX = Math.min(minX, p.originalCorrectX);
+                    minY = Math.min(minY, p.originalCorrectY);
+                    maxX = Math.max(maxX, p.originalCorrectX + p.originalW);
+                    maxY = Math.max(maxY, p.originalCorrectY + p.originalH);
+                });
+                
+                const originalPuzzleW = maxX - minX;
+                const originalPuzzleH = maxY - minY;
+                
+                // Вычисляем масштаб (целевой размер пазла ~70% экрана, кусочек ~120-150px)
+                const targetScreenSize = Math.min(window.innerWidth, window.innerHeight) * 0.7;
+                const targetPieceSize = 140;
+                const originalPieceSize = loadedPieces[0].originalW;
+                
+                const scaleByScreen = targetScreenSize / Math.max(originalPuzzleW, originalPuzzleH);
+                const scaleByPiece = targetPieceSize / originalPieceSize;
+                globalScale = Math.min(scaleByScreen, scaleByPiece, 1.2);
+                
+                console.log(`📐 Масштаб: ${globalScale.toFixed(3)} (ориг. кусок ${originalPieceSize}px → ${Math.round(originalPieceSize * globalScale)}px)`);
+                
+                // Применяем масштаб ко всем кусочкам
+                pieces = [];
+                let boardMinX = Infinity, boardMinY = Infinity;
+                let boardMaxX = -Infinity, boardMaxY = -Infinity;
+                
+                for(let p of loadedPieces) {
+                    const scaledPiece = {
+                        id: p.id,
+                        img: p.img,
+                        correctX: p.originalCorrectX * globalScale,
+                        correctY: p.originalCorrectY * globalScale,
+                        x: 0, y: 0,
+                        w: p.originalW * globalScale,
+                        h: p.originalH * globalScale,
+                        fixed: false,
+                        group: null
+                    };
+                    pieces.push(scaledPiece);
+                    boardMinX = Math.min(boardMinX, scaledPiece.correctX);
+                    boardMinY = Math.min(boardMinY, scaledPiece.correctY);
+                    boardMaxX = Math.max(boardMaxX, scaledPiece.correctX + scaledPiece.w);
+                    boardMaxY = Math.max(boardMaxY, scaledPiece.correctY + scaledPiece.h);
+                }
+                
+                // Размеры доски (области сборки)
+                const boardW = boardMaxX - boardMinX;
+                const boardH = boardMaxY - boardMinY;
+                
+                // Настраиваем canvas (с отступами для разбросанных кусочков)
+                const padding = Math.max(300, Math.min(500, boardW * 0.3));
+                const canvasW = boardW + padding * 2;
+                const canvasH = boardH + padding * 2;
+                const boardOffsetX = padding + (canvasW - 2*padding - boardW) / 2;
+                const boardOffsetY = padding + (canvasH - 2*padding - boardH) / 2;
+                
+                // Смещаем правильные позиции в центр canvas
+                const offsetX = boardOffsetX - boardMinX;
+                const offsetY = boardOffsetY - boardMinY;
+                
+                pieces.forEach(p => {
+                    p.correctX += offsetX;
+                    p.correctY += offsetY;
+                });
+                
+                canvas.width = canvasW;
+                canvas.height = canvasH;
+                
+                // Разбрасываем кусочки
+                const scattered = [];
+                for(let p of pieces) {
+                    const pos = getRandomPositionOutside(p.w, p.h, scattered, canvasW, canvasH, boardOffsetX, boardOffsetY, boardW, boardH);
+                    p.x = pos.x;
+                    p.y = pos.y;
+                    scattered.push(p);
+                }
+                
+                console.log(`✅ Загружено ${pieces.length} кусочков`);
+                console.log(`📐 Canvas: ${canvasW}x${canvasH}`);
+                console.log(`📐 Область сборки: x=${boardOffsetX}, y=${boardOffsetY}, w=${boardW}, h=${boardH}`);
+                
+                updateProgress();
+                draw();
+                
+                // Сбрасываем камеру
+                resetView();
+                
+            } catch(error) {
+                console.error('Ошибка загрузки пазла:', error);
+                alert('Не удалось загрузить пазл. Пожалуйста, обновите страницу.');
+            } finally {
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+        
+        function draw(){
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#1a2418";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Сетка
+            ctx.strokeStyle = "rgba(255,255,255,0.05)";
+            ctx.lineWidth = 1;
+            for(let i = 0; i < canvas.width; i += 100){
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+            
+            // Рисуем область сборки (жёлтая рамка)
+            if(pieces.length > 0) {
+                let boardMinX = Infinity, boardMinY = Infinity;
+                let boardMaxX = -Infinity, boardMaxY = -Infinity;
+                pieces.forEach(p => {
+                    boardMinX = Math.min(boardMinX, p.correctX);
+                    boardMinY = Math.min(boardMinY, p.correctY);
+                    boardMaxX = Math.max(boardMaxX, p.correctX + p.w);
+                    boardMaxY = Math.max(boardMaxY, p.correctY + p.h);
+                });
+                ctx.strokeStyle = "rgba(255,215,0,0.4)";
+                ctx.lineWidth = 4;
+                ctx.setLineDash([15, 10]);
+                ctx.strokeRect(boardMinX - 10, boardMinY - 10, (boardMaxX - boardMinX) + 20, (boardMaxY - boardMinY) + 20);
+                ctx.setLineDash([]);
+            }
+            
+            // Рисуем кусочки
+            pieces.forEach(p => {
+                const isSelected = (p === selectedPiece && !p.fixed);
+                const scaleHover = isSelected ? 1.05 : 1;
+                ctx.save();
+                let drawX = p.x, drawY = p.y, drawW = p.w, drawH = p.h;
+                if (scaleHover !== 1) {
+                    const offX = (p.w * (scaleHover - 1)) / 2;
+                    const offY = (p.h * (scaleHover - 1)) / 2;
+                    drawX = p.x - offX;
+                    drawY = p.y - offY;
+                    drawW = p.w * scaleHover;
+                    drawH = p.h * scaleHover;
+                }
+                if (isSelected) {
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = "rgba(255, 215, 0, 0.6)";
+                } else {
+                    ctx.shadowBlur = 4;
+                    ctx.shadowColor = "rgba(0,0,0,0.3)";
+                }
+                ctx.drawImage(p.img, drawX, drawY, drawW, drawH);
+                ctx.shadowBlur = 0;
+                
+                if (isSelected) {
+                    ctx.strokeStyle = "#ffd27a";
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(drawX, drawY, drawW, drawH);
+                } else if(p.fixed){
+                    ctx.strokeStyle = "#4caf50";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(drawX, drawY, drawW, drawH);
+                }
+                
+                // Показываем контур правильной позиции для нефиксированных кусочков
+                if (!p.fixed && Math.hypot(p.x - p.correctX, p.y - p.correctY) < 120) {
+                    ctx.strokeStyle = "rgba(255, 200, 0, 0.5)";
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([6, 6]);
+                    ctx.strokeRect(p.correctX, p.correctY, p.w, p.h);
+                    ctx.setLineDash([]);
+                }
+                ctx.restore();
             });
-
-            this.board.addEventListener("wheel", (e) => {
-                e.preventDefault();
-                const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
-                const newScale = Math.max(0.5, Math.min(2, this.camera.scale * zoomFactor));
-                this.board.style.transform = `scale(${newScale})`;
-                this.camera.scale = newScale;
-            }, { passive: false });
-
-            window.addEventListener("resize", () => {
-                this.setupDimensions();
-                this.pieces.forEach(p => {
-                    if (!p.isPlaced) {
-                        this.updatePiecePosition(p);
+        }
+        
+        function checkWin(){
+            const allPlaced = pieces.length > 0 && pieces.every(p => p.fixed === true);
+            if(allPlaced && gameStarted && !winShown){
+                winShown = true;
+                setTimeout(() => {
+                    winOverlay.classList.remove("hidden");
+                    winOverlay.classList.add("active");
+                    if(audio && audioEnabled) audio.pause();
+                }, 500);
+            }
+        }
+        
+        function getCanvasCoords(clientX, clientY){
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+        
+        function getPieceAt(m){
+            for(let i = pieces.length-1; i >= 0; i--) {
+                const p = pieces[i];
+                if(p.fixed) continue;
+                if(m.x >= p.x && m.x <= p.x + p.w && m.y >= p.y && m.y <= p.y + p.h) {
+                    return p;
+                }
+            }
+            return null;
+        }
+        
+        function onMouseDown(e){
+            e.preventDefault();
+            if(!gameStarted) return;
+            const m = getCanvasCoords(e.clientX, e.clientY);
+            const piece = getPieceAt(m);
+            if(piece) {
+                selectedPiece = piece;
+                const group = piece.group || [piece];
+                const firstPiece = group[0];
+                dragOffsetX = m.x - firstPiece.x;
+                dragOffsetY = m.y - firstPiece.y;
+                return;
+            }
+            isDraggingWrapper = true;
+            wrapperDragStart.x = e.clientX - panX;
+            wrapperDragStart.y = e.clientY - panY;
+        }
+        
+        function onMouseMove(e){
+            if(!gameStarted) return;
+            if(selectedPiece){
+                if(selectedPiece.fixed) {
+                    selectedPiece = null;
+                    return;
+                }
+                const m = getCanvasCoords(e.clientX, e.clientY);
+                const group = selectedPiece.group || [selectedPiece];
+                const firstPiece = group[0];
+                const newX = m.x - dragOffsetX;
+                const newY = m.y - dragOffsetY;
+                const dx = newX - firstPiece.x;
+                const dy = newY - firstPiece.y;
+                group.forEach(p => {
+                    if(!p.fixed) {
+                        p.x += dx;
+                        p.y += dy;
                     }
                 });
-            });
-        }
-
-        checkSnap(piece) {
-            const snapThreshold = 30;
-            const dx = piece.x - piece.targetX;
-            const dy = piece.y - piece.targetY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < snapThreshold) {
-                piece.x = piece.targetX;
-                piece.y = piece.targetY;
-                piece.isPlaced = true;
-                piece.element.classList.add("placed");
-                this.updatePiecePosition(piece);
-                this.placedCount++;
-                this.updateUI();
-                
-                if (this.placedCount === this.totalPieces) {
-                    this.triggerWin();
-                }
+                draw();
+                return;
+            }
+            if(isDraggingWrapper){
+                panX = e.clientX - wrapperDragStart.x;
+                panY = e.clientY - wrapperDragStart.y;
+                wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
             }
         }
-
-        updateUI() {
-            const pct = Math.round((this.placedCount / this.totalPieces) * 100);
-            document.getElementById("progressBar").style.width = `${pct}%`;
-            document.getElementById("progressText").textContent = 
-                `Собрано ${this.placedCount} / ${this.totalPieces}`;
+        
+        function onMouseUp(e){
+            if(!gameStarted) return;
+            if(selectedPiece){
+                if(!selectedPiece.fixed) {
+                    const group = selectedPiece.group || [selectedPiece];
+                    let snappedToBoard = false;
+                    for(let p of group){
+                        if(!p.fixed && trySnapToCorrect(p)){ snappedToBoard = true; break; }
+                    }
+                    if(!snappedToBoard){
+                        for(let i = 0; i < group.length; i++) {
+                            for(let j = i+1; j < group.length; j++) {
+                                trySnapPieces(group[i], group[j]);
+                            }
+                        }
+                        for(let other of pieces) {
+                            if(group.includes(other)) continue;
+                            for(let p of group) {
+                                if(trySnapPieces(p, other)) break;
+                            }
+                        }
+                    }
+                }
+                selectedPiece = null;
+                draw();
+            }
+            isDraggingWrapper = false;
         }
-
-        triggerWin() {
-            document.getElementById("giftBlock").style.display = "block";
+        
+        function onWheel(e){
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            const oldScale = scale;
+            scale = Math.min(Math.max(0.3, scale + delta), 3);
+            
+            // Корректируем pan, чтобы масштабирование было относительно центра экрана
+            const rect = wrapper.getBoundingClientRect();
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            
+            panX = centerX - (centerX - panX) * (scale / oldScale);
+            panY = centerY - (centerY - panY) * (scale / oldScale);
+            
+            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
         }
-
-        render() {
-            // Initial render is done by DOM manipulation
+        
+        function zoom(delta){
+            const oldScale = scale;
+            scale = Math.min(Math.max(0.3, scale + delta), 3);
+            
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            
+            panX = centerX - (centerX - panX) * (scale / oldScale);
+            panY = centerY - (centerY - panY) * (scale / oldScale);
+            
+            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
         }
-    }
-
-    // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-        const puzzleId = '{{ puzzle_id }}';
-        fetch(`/image/${puzzleId}`)
-            .then(res => res.blob())
-            .then(blob => URL.createObjectURL(blob))
-            .then(url => {
-                new PuzzleGame('gameContainer', url, 5, 10);
-            })
-            .catch(err => {
-                console.error('Error:', err);
-                document.getElementById('loading').textContent = 'Ошибка загрузки';
+        
+        function resetView(){
+            if(!pieces.length) return;
+            
+            // Находим границы всех кусочков
+            let minX = Infinity, minY = Infinity;
+            let maxX = -Infinity, maxY = -Infinity;
+            pieces.forEach(p => {
+                minX = Math.min(minX, p.x, p.correctX);
+                minY = Math.min(minY, p.y, p.correctY);
+                maxX = Math.max(maxX, p.x + p.w, p.correctX + p.w);
+                maxY = Math.max(maxY, p.y + p.h, p.correctY + p.h);
             });
-    });
-    </script>
+            
+            const contentW = maxX - minX;
+            const contentH = maxY - minY;
+            const viewW = window.innerWidth * 0.85;
+            const viewH = window.innerHeight * 0.85;
+            
+            scale = Math.min(viewW / contentW, viewH / contentH, 1.2);
+            
+            // Центрируем содержимое
+            const canvasCenterX = (minX + maxX) / 2;
+            const canvasCenterY = (minY + maxY) / 2;
+            
+            panX = window.innerWidth / 2 - canvasCenterX * scale;
+            panY = window.innerHeight / 2 - canvasCenterY * scale;
+            
+            wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
+        }
+        
+        function toggleMusic() {
+            if(audioEnabled) {
+                audio.pause();
+                audioEnabled = false;
+                musicToggle.innerHTML = "🔇 Включить музыку";
+            } else {
+                audio.play().catch(()=>{});
+                audioEnabled = true;
+                musicToggle.innerHTML = "🔇 Выключить музыку";
+            }
+        }
+        
+        function downloadTicket() {
+            window.location.href = `/download/${PUZZLE_ID}`;
+        }
+        
+        async function startGame(){
+            if(gameStarted) return;
+            await initPuzzle();
+            gameStarted = true;
+            winShown = false;
+            overlay.classList.add("hidden");
+            gameDiv.classList.remove("hidden");
+            musicToggle.classList.remove("hidden");
+            if(audioEnabled) audio.play().catch(()=>{});
+        }
+        
+        // Обработчики
+        startBtn.onclick = startGame;
+        startBtn.ontouchstart = (e) => { e.preventDefault(); startGame(); };
+        
+        document.getElementById('downloadTicketBtn').onclick = downloadTicket;
+        musicToggle.onclick = toggleMusic;
+        
+        zoomInBtn.onclick = () => zoom(0.15);
+        zoomOutBtn.onclick = () => zoom(-0.15);
+        resetViewBtn.onclick = () => resetView();
+        
+        canvas.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('wheel', onWheel, { passive: false });
+        
+        // Touch события
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if(!gameStarted) return;
+            const touch = e.touches[0];
+            const m = getCanvasCoords(touch.clientX, touch.clientY);
+            const piece = getPieceAt(m);
+            if(piece) {
+                selectedPiece = piece;
+                const group = piece.group || [piece];
+                const firstPiece = group[0];
+                dragOffsetX = m.x - firstPiece.x;
+                dragOffsetY = m.y - firstPiece.y;
+                return;
+            }
+            isDraggingWrapper = true;
+            wrapperDragStart.x = touch.clientX - panX;
+            wrapperDragStart.y = touch.clientY - panY;
+        });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if(!gameStarted) return;
+            const touch = e.touches[0];
+            if(selectedPiece){
+                if(selectedPiece.fixed) {
+                    selectedPiece = null;
+                    return;
+                }
+                const m = getCanvasCoords(touch.clientX, touch.clientY);
+                const group = selectedPiece.group || [selectedPiece];
+                const firstPiece = group[0];
+                const newX = m.x - dragOffsetX;
+                const newY = m.y - dragOffsetY;
+                const dx = newX - firstPiece.x;
+                const dy = newY - firstPiece.y;
+                group.forEach(p => {
+                    if(!p.fixed) {
+                        p.x += dx;
+                        p.y += dy;
+                    }
+                });
+                draw();
+                return;
+            }
+            if(isDraggingWrapper){
+                panX = touch.clientX - wrapperDragStart.x;
+                panY = touch.clientY - wrapperDragStart.y;
+                wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
+            }
+        });
+        
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if(!gameStarted) return;
+            if(selectedPiece){
+                if(!selectedPiece.fixed) {
+                    const group = selectedPiece.group || [selectedPiece];
+                    let snappedToBoard = false;
+                    for(let p of group){
+                        if(!p.fixed && trySnapToCorrect(p)){ snappedToBoard = true; break; }
+                    }
+                    if(!snappedToBoard){
+                        for(let i = 0; i < group.length; i++) {
+                            for(let j = i+1; j < group.length; j++) {
+                                trySnapPieces(group[i], group[j]);
+                            }
+                        }
+                        for(let other of pieces) {
+                            if(group.includes(other)) continue;
+                            for(let p of group) {
+                                if(trySnapPieces(p, other)) break;
+                            }
+                        }
+                    }
+                }
+                selectedPiece = null;
+                draw();
+            }
+            isDraggingWrapper = false;
+        });
+        
+        console.log('🎯 Puzzle page ready, puzzle_id:', PUZZLE_ID);
+    })();
+</script>
 </body>
 </html>
