@@ -11,27 +11,40 @@
             background: #1a231a;
             min-height: 100vh;
             overflow: hidden;
-            position: relative;
         }
-        #puzzleCanvas {
+        #gameContainer {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            cursor: grab;
-            z-index: 1;
+            overflow: hidden;
         }
-        #puzzleCanvas:active { cursor: grabbing; }
+        #puzzleBoard {
+            position: absolute;
+            cursor: grab;
+        }
+        #puzzleBoard:active { cursor: grabbing; }
+        .puzzle-piece {
+            position: absolute;
+            cursor: grab;
+            transition: filter 0.2s;
+            filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.3));
+        }
+        .puzzle-piece:active { cursor: grabbing; filter: drop-shadow(4px 4px 8px rgba(0,0,0,0.4)); }
+        .puzzle-piece.placed { 
+            filter: drop-shadow(0 0 0 rgba(0,0,0,0)); 
+            opacity: 0.9;
+            pointer-events: none;
+        }
         .header {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
             padding: 15px 20px;
-            z-index: 10;
+            z-index: 1000;
             box-shadow: 0 2px 20px rgba(0,0,0,0.1);
             text-align: center;
         }
@@ -46,7 +59,7 @@
             padding: 10px 25px;
             border-radius: 30px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            z-index: 10;
+            z-index: 1000;
             display: flex;
             align-items: center;
             gap: 15px;
@@ -75,7 +88,7 @@
             padding: 40px;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            z-index: 100;
+            z-index: 2000;
             text-align: center;
             max-width: 90%;
             width: 500px;
@@ -100,18 +113,6 @@
             transition: transform 0.2s;
         }
         .download-btn:hover { transform: scale(1.05); }
-        .close-music {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(255,255,255,0.9);
-            border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
-            cursor: pointer;
-            z-index: 10;
-            font-size: 14px;
-        }
         .instructions {
             position: fixed;
             bottom: 20px;
@@ -122,7 +123,7 @@
             border-radius: 20px;
             font-size: 14px;
             color: #666;
-            z-index: 10;
+            z-index: 1000;
         }
         .loading {
             position: fixed;
@@ -134,17 +135,19 @@
             padding: 20px 40px;
             border-radius: 10px;
             font-size: 18px;
-            z-index: 200;
+            z-index: 3000;
         }
     </style>
 </head>
 <body>
     <div class="loading" id="loading">Загрузка пазла...</div>
-    <canvas id="puzzleCanvas"></canvas>
+    <div id="gameContainer">
+        <div id="puzzleBoard"></div>
+    </div>
 
     <div class="header">
-        <h1> Собери пазл</h1>
-        <p>Дорогая, я знаю, как ты любишь пазлы, поэтому я подготовил тебе задачку, чтобы получить свой подарок! 😜</p>
+        <h1>🎁 Собери пазл</h1>
+        <p>Дорогая, я знаю, как ты любишь пазлы, поэтому я подготовил тебе задачку! 😜</p>
     </div>
 
     <div class="progress-container">
@@ -154,50 +157,111 @@
     </div>
 
     <div class="instructions">
-        🖱️ Перетаскивай куски • Колёсико — зум • Зажми ЛКМ на пустом месте — панорама
+        🖱️ Перетаскивай пазлы • Колёсико — зум • Пустое место — панорама
     </div>
-
-    <button class="close-music" onclick="toggleMusic()">🔇 Выключить музыку</button>
 
     <div class="gift-block" id="giftBlock">
         <div class="gift-icon">🎂</div>
         <h2>С днём рождения, любимая!</h2>
         <p>Ты собрала пазл — а вот и подарок:</p>
         <p><strong>🎁 Твой билет на концерт!</strong></p>
-        <p>📅 С нетерпением жду этого вечера с тобой!</p>
         <a href="/download/{{ puzzle_id }}" class="download-btn" download>📎 Скачать билет</a>
     </div>
 
-    <audio id="bgMusic" loop>
-        <source src="/static/music.mp3" type="audio/mpeg">
-    </audio>
-
     <script>
+    // ==================== ГЕНЕРАЦИЯ ФОРМ ПАЗЛОВ ====================
+    function createPuzzleShape(pieceWidth, pieceHeight, tabSize, edge) {
+        // edge: {top: 1/-1/0, right: 1/-1/0, bottom: 1/-1/0, left: 1/-1/0}
+        // 1 = выступ, -1 = выемка, 0 = край
+        const w = pieceWidth;
+        const h = pieceHeight;
+        const t = tabSize;
+        
+        let path = '';
+        
+        // Top edge
+        if (edge.top === 0) {
+            path += `M 0,0 L ${w},0`;
+        } else {
+            const dir = edge.top;
+            path += `M 0,0 `;
+            path += `L ${w/2 - t},0 `;
+            path += `C ${w/2 - t},${-dir*t*0.3} ${w/2 - t},${-dir*t} ${w/2},${-dir*t} `;
+            path += `C ${w/2 + t},${-dir*t} ${w/2 + t},${-dir*t*0.3} ${w/2 + t},0 `;
+            path += `L ${w},0`;
+        }
+        
+        // Right edge
+        if (edge.right === 0) {
+            path += ` L ${w},${h}`;
+        } else {
+            const dir = edge.right;
+            path += ` L ${w},${h/2 - t}`;
+            path += `C ${w + dir*t*0.3},${h/2 - t} ${w + dir*t},${h/2 - t} ${w + dir*t},${h/2} `;
+            path += `C ${w + dir*t},${h/2 + t} ${w + dir*t*0.3},${h/2 + t} ${w},${h/2 + t} `;
+            path += `L ${w},${h}`;
+        }
+        
+        // Bottom edge
+        if (edge.bottom === 0) {
+            path += ` L 0,${h}`;
+        } else {
+            const dir = edge.bottom;
+            path += ` L ${w/2 + t},${h}`;
+            path += `C ${w/2 + t},${h + dir*t*0.3} ${w/2 + t},${h + dir*t} ${w/2},${h + dir*t} `;
+            path += `C ${w/2 - t},${h + dir*t} ${w/2 - t},${h + dir*t*0.3} ${w/2 - t},${h} `;
+            path += `L 0,${h}`;
+        }
+        
+        // Left edge
+        if (edge.left === 0) {
+            path += ` Z`;
+        } else {
+            const dir = edge.left;
+            path += ` L 0,${h/2 + t}`;
+            path += `C ${0 + dir*t*0.3},${h/2 + t} ${0 + dir*t},${h/2 + t} ${0 + dir*t},${h/2} `;
+            path += `C ${0 + dir*t},${h/2 - t} ${0 + dir*t*0.3},${h/2 - t} ${0},${h/2 - t} `;
+            path += `Z`;
+        }
+        
+        return path;
+    }
+
+    function getRandomEdge(isEdge, neighborExists) {
+        if (!neighborExists) return 0; // край доски
+        if (!isEdge) return Math.random() > 0.5 ? 1 : -1;
+        return 0;
+    }
+
+    // ==================== PUZZLE GAME ====================
     class PuzzleGame {
-        constructor(canvasId, imageUrl, rows = 5, cols = 10) {
-            this.canvas = document.getElementById(canvasId);
-            this.ctx = this.canvas.getContext('2d');
+        constructor(containerId, imageUrl, rows = 5, cols = 10) {
+            this.container = document.getElementById(containerId);
+            this.board = document.getElementById('puzzleBoard');
             this.imageUrl = imageUrl;
             this.rows = rows;
             this.cols = cols;
             this.pieces = [];
+            this.placedCount = 0;
+            this.totalPieces = rows * cols;
+            this.boardWidth = 0;
+            this.boardHeight = 0;
+            this.pieceWidth = 0;
+            this.pieceHeight = 0;
+            this.tabSize = 0;
             this.camera = { x: 0, y: 0, scale: 1 };
             this.dragging = null;
             this.dragOffset = { x: 0, y: 0 };
             this.isPanning = false;
             this.lastPointer = { x: 0, y: 0 };
-            this.placedCount = 0;
-            this.totalPieces = rows * cols;
-            this.board = { w: 0, h: 0 };
-            this.isWon = false;
             this.image = null;
+            this.svgDefs = null;
 
             this.init();
         }
 
         async init() {
-            this.resize();
-            window.addEventListener('resize', () => this.resize());
+            this.setupCamera();
             this.bindEvents();
 
             const img = new Image();
@@ -210,255 +274,269 @@
             });
             
             this.image = img;
-            this.board.w = img.width;
-            this.board.h = img.height;
-            
+            this.setupDimensions();
+            this.createSVGDefs();
             this.createPieces();
-            this.setupCamera();
+            this.scatterPieces();
             
             document.getElementById('loading').style.display = 'none';
             this.render();
         }
 
-        resize() {
-            const dpr = window.devicePixelRatio || 1;
-            this.canvas.width = window.innerWidth * dpr;
-            this.canvas.height = window.innerHeight * dpr;
-            this.canvas.style.width = `${window.innerWidth}px`;
-            this.canvas.style.height = `${window.innerHeight}px`;
-            this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        setupDimensions() {
+            const maxWidth = Math.min(window.innerWidth * 0.9, 1200);
+            const maxHeight = window.innerHeight * 0.7;
+            
+            const scale = Math.min(
+                maxWidth / this.image.width,
+                maxHeight / this.image.height,
+                1
+            );
+            
+            this.boardWidth = this.image.width * scale;
+            this.boardHeight = this.image.height * scale;
+            this.pieceWidth = this.boardWidth / this.cols;
+            this.pieceHeight = this.boardHeight / this.rows;
+            this.tabSize = Math.min(this.pieceWidth, this.pieceHeight) * 0.25;
+            
+            this.board.style.width = `${this.boardWidth}px`;
+            this.board.style.height = `${this.boardHeight}px`;
+        }
+
+        setupCamera() {
+            this.camera.x = window.innerWidth / 2;
+            this.camera.y = window.innerHeight / 2;
+            this.camera.scale = 1;
+        }
+
+        createSVGDefs() {
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.style.position = "absolute";
+            svg.style.width = "100%";
+            svg.style.height = "100%";
+            svg.style.pointerEvents = "none";
+            this.board.appendChild(svg);
+            
+            this.svgDefs = svg;
         }
 
         createPieces() {
-            const pw = this.board.w / this.cols;
-            const ph = this.board.h / this.rows;
             this.pieces = [];
+            const svgNS = "http://www.w3.org/2000/svg";
 
             for (let r = 0; r < this.rows; r++) {
                 for (let c = 0; c < this.cols; c++) {
-                    this.pieces.push({
+                    const edge = {
+                        top: r === 0 ? 0 : (Math.random() > 0.5 ? 1 : -1),
+                        right: c === this.cols - 1 ? 0 : (Math.random() > 0.5 ? 1 : -1),
+                        bottom: r === this.rows - 1 ? 0 : (Math.random() > 0.5 ? 1 : -1),
+                        left: c === 0 ? 0 : (Math.random() > 0.5 ? 1 : -1)
+                    };
+
+                    // Корректируем соседние края
+                    if (r > 0) {
+                        const abovePiece = this.pieces.find(p => p.row === r - 1 && p.col === c);
+                        if (abovePiece) {
+                            edge.top = -abovePiece.edge.bottom;
+                        }
+                    }
+                    if (c > 0) {
+                        const leftPiece = this.pieces.find(p => p.row === r && p.col === c - 1);
+                        if (leftPiece) {
+                            edge.left = -leftPiece.edge.right;
+                        }
+                    }
+
+                    const pathData = createPuzzleShape(this.pieceWidth, this.pieceHeight, this.tabSize, edge);
+                    
+                    const g = document.createElementNS(svgNS, "g");
+                    g.classList.add("puzzle-piece");
+                    g.setAttribute("data-id", `${c}-${r}`);
+                    
+                    // Clip path для изображения
+                    const clipPath = document.createElementNS(svgNS, "clipPath");
+                    const clipId = `clip-${c}-${r}`;
+                    clipPath.setAttribute("id", clipId);
+                    
+                    const clipPathEl = document.createElementNS(svgNS, "path");
+                    clipPathEl.setAttribute("d", pathData);
+                    clipPath.appendChild(clipPathEl);
+                    
+                    // Изображение
+                    const img = document.createElementNS(svgNS, "image");
+                    img.setAttribute("href", this.imageUrl);
+                    img.setAttribute("width", this.image.width);
+                    img.setAttribute("height", this.image.height);
+                    img.setAttribute("clip-path", `url(#${clipId})`);
+                    img.setAttribute("x", -c * this.pieceWidth * (this.image.width / this.boardWidth));
+                    img.setAttribute("y", -r * this.pieceHeight * (this.image.height / this.boardHeight));
+                    img.setAttribute("style", `width: ${this.image.width}px; height: ${this.image.height}px`);
+                    
+                    // Граница пазла
+                    const path = document.createElementNS(svgNS, "path");
+                    path.setAttribute("d", pathData);
+                    path.setAttribute("fill", "none");
+                    path.setAttribute("stroke", "rgba(0,0,0,0.3)");
+                    path.setAttribute("stroke-width", "1");
+                    
+                    g.appendChild(clipPath);
+                    g.appendChild(img);
+                    g.appendChild(path);
+                    this.svgDefs.appendChild(clipPath);
+                    
+                    const piece = {
+                        element: g,
                         id: `${c}-${r}`,
-                        targetX: c * pw,
-                        targetY: r * ph,
-                        x: 0, y: 0,
-                        w: pw, h: ph,
+                        row: r,
+                        col: c,
+                        targetX: c * this.pieceWidth,
+                        targetY: r * this.pieceHeight,
+                        x: 0,
+                        y: 0,
+                        edge: edge,
                         isPlaced: false,
                         zIndex: Math.random()
-                    });
+                    };
+                    
+                    this.pieces.push(piece);
+                    this.board.appendChild(g);
+                    
+                    // Drag events
+                    g.addEventListener("mousedown", (e) => this.onPieceMouseDown(e, piece));
                 }
             }
-            this.scatterPieces();
         }
 
         scatterPieces() {
             const margin = 100;
-            const areaW = this.board.w + margin * 2;
-            const areaH = this.board.h + margin * 2;
-
             this.pieces.forEach(p => {
-                p.x = (Math.random() - 0.5) * areaW;
-                p.y = (Math.random() - 0.5) * areaH;
+                p.x = (Math.random() - 0.5) * (this.boardWidth + margin * 2);
+                p.y = (Math.random() - 0.5) * (this.boardHeight + margin * 2);
+                this.updatePiecePosition(p);
             });
         }
 
-        setupCamera() {
-            const cw = window.innerWidth;
-            const ch = window.innerHeight;
-            const padding = 150;
-            const viewW = this.board.w + padding * 2;
-            const viewH = this.board.h + padding * 2;
-
-            this.camera.scale = Math.min(cw / viewW, ch / viewH, 1.0);
-            this.camera.x = cw / 2;
-            this.camera.y = ch / 2;
+        updatePiecePosition(piece) {
+            piece.element.style.transform = `translate(${piece.x}px, ${piece.y}px)`;
+            piece.element.style.zIndex = Math.floor(piece.zIndex);
         }
 
-        worldToScreen(wx, wy) {
-            return {
-                x: wx * this.camera.scale + this.camera.x,
-                y: wy * this.camera.scale + this.camera.y
+        onPieceMouseDown(e, piece) {
+            if (piece.isPlaced) return;
+            e.preventDefault();
+            e.stopPropagation();
+            
+            this.dragging = piece;
+            const rect = this.board.getBoundingClientRect();
+            this.dragOffset = {
+                x: e.clientX - rect.left - piece.x,
+                y: e.clientY - rect.top - piece.y
             };
-        }
-
-        screenToWorld(sx, sy) {
-            return {
-                x: (sx - this.camera.x) / this.camera.scale,
-                y: (sy - this.camera.y) / this.camera.scale
-            };
+            piece.zIndex = this.pieces.length + 1;
+            this.updatePiecePosition(piece);
         }
 
         bindEvents() {
-            const onDown = (e) => {
-                e.preventDefault();
-                const pos = this.screenToWorld(e.clientX, e.clientY);
-
-                for (let i = this.pieces.length - 1; i >= 0; i--) {
-                    const p = this.pieces[i];
-                    if (p.isPlaced) continue;
-                    if (pos.x >= p.x && pos.x <= p.x + p.w && 
-                        pos.y >= p.y && pos.y <= p.y + p.h) {
-                        this.dragging = p;
-                        this.dragOffset = { x: pos.x - p.x, y: pos.y - p.y };
-                        p.zIndex = this.pieces.length + 1;
-                        this.canvas.style.cursor = 'grabbing';
-                        return;
-                    }
-                }
-
-                this.isPanning = true;
-                this.lastPointer = { x: e.clientX, y: e.clientY };
-                this.canvas.style.cursor = 'move';
-            };
-
-            const onMove = (e) => {
+            window.addEventListener("mousemove", (e) => {
                 if (this.dragging) {
-                    const pos = this.screenToWorld(e.clientX, e.clientY);
-                    this.dragging.x = pos.x - this.dragOffset.x;
-                    this.dragging.y = pos.y - this.dragOffset.y;
-                    this.render();
+                    const rect = this.board.getBoundingClientRect();
+                    this.dragging.x = e.clientX - rect.left - this.dragOffset.x;
+                    this.dragging.y = e.clientY - rect.top - this.dragOffset.y;
+                    this.updatePiecePosition(this.dragging);
                 } else if (this.isPanning) {
                     const dx = e.clientX - this.lastPointer.x;
                     const dy = e.clientY - this.lastPointer.y;
-                    this.camera.x += dx;
-                    this.camera.y += dy;
+                    this.board.style.left = `${parseFloat(this.board.style.left || 0) + dx}px`;
+                    this.board.style.top = `${parseFloat(this.board.style.top || 0) + dy}px`;
                     this.lastPointer = { x: e.clientX, y: e.clientY };
-                    this.render();
                 }
-            };
-
-            const onUp = () => {
-                if (this.dragging) {
-                    const snapThreshold = 15 / this.camera.scale;
-                    const dx = this.dragging.x - this.dragging.targetX;
-                    const dy = this.dragging.y - this.dragging.targetY;
-                    const dist = Math.hypot(dx, dy);
-
-                    if (dist < snapThreshold) {
-                        this.dragging.x = this.dragging.targetX;
-                        this.dragging.y = this.dragging.targetY;
-                        this.dragging.isPlaced = true;
-                        this.placedCount++;
-                        this.updateUI();
-                        if (this.placedCount === this.totalPieces) {
-                            this.triggerWin();
-                        }
-                    }
-                    this.dragging = null;
-                    this.canvas.style.cursor = 'default';
-                }
-                this.isPanning = false;
-                this.render();
-            };
-
-            const onWheel = (e) => {
-                e.preventDefault();
-                const zoomFactor = e.deltaY > 0 ? 0.92 : 1.08;
-                const newScale = Math.max(0.3, Math.min(2.5, this.camera.scale * zoomFactor));
-
-                const worldBefore = this.screenToWorld(e.clientX, e.clientY);
-                this.camera.scale = newScale;
-                const worldAfter = this.screenToWorld(e.clientX, e.clientY);
-                this.camera.x += (worldAfter.x - worldBefore.x) * this.camera.scale;
-                this.camera.y += (worldAfter.y - worldBefore.y) * this.camera.scale;
-
-                this.render();
-            };
-
-            this.canvas.addEventListener('mousedown', onDown);
-            window.addEventListener('mousemove', onMove);
-            window.addEventListener('mouseup', onUp);
-            this.canvas.addEventListener('wheel', onWheel, { passive: false });
-        }
-
-        render() {
-            if (!this.image) return;
-            const ctx = this.ctx;
-            ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-            ctx.save();
-            ctx.translate(this.camera.x, this.camera.y);
-            ctx.scale(this.camera.scale, this.camera.scale);
-
-            // Фон доски (рамка)
-            ctx.fillStyle = 'rgba(30, 40, 30, 0.8)';
-            ctx.fillRect(0, 0, this.board.w, this.board.h);
-            
-            // Обводка рамки
-            ctx.strokeStyle = '#8B7355';
-            ctx.lineWidth = 4 / this.camera.scale;
-            ctx.strokeRect(0, 0, this.board.w, this.board.h);
-
-            // Сетка
-            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-            ctx.lineWidth = 1 / this.camera.scale;
-            for (let r = 1; r < this.rows; r++) {
-                const y = r * (this.board.h / this.rows);
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.board.w, y); ctx.stroke();
-            }
-            for (let c = 1; c < this.cols; c++) {
-                const x = c * (this.board.w / this.cols);
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.board.h); ctx.stroke();
-            }
-
-            // Рисуем куски
-            this.pieces.sort((a, b) => a.zIndex - b.zIndex);
-            this.pieces.forEach(p => {
-                if (p.isPlaced) ctx.globalAlpha = 0.3;
-                ctx.drawImage(this.image, p.targetX, p.targetY, p.w, p.h, p.x, p.y, p.w, p.h);
-                if (p.isPlaced) ctx.globalAlpha = 1;
             });
 
-            ctx.restore();
+            window.addEventListener("mouseup", () => {
+                if (this.dragging) {
+                    this.checkSnap(this.dragging);
+                    this.dragging = null;
+                }
+                this.isPanning = false;
+            });
+
+            this.board.addEventListener("mousedown", (e) => {
+                if (e.target === this.board || e.target.tagName === "svg") {
+                    this.isPanning = true;
+                    this.lastPointer = { x: e.clientX, y: e.clientY };
+                }
+            });
+
+            this.board.addEventListener("wheel", (e) => {
+                e.preventDefault();
+                const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
+                const newScale = Math.max(0.5, Math.min(2, this.camera.scale * zoomFactor));
+                this.board.style.transform = `scale(${newScale})`;
+                this.camera.scale = newScale;
+            }, { passive: false });
+
+            window.addEventListener("resize", () => {
+                this.setupDimensions();
+                this.pieces.forEach(p => {
+                    if (!p.isPlaced) {
+                        this.updatePiecePosition(p);
+                    }
+                });
+            });
+        }
+
+        checkSnap(piece) {
+            const snapThreshold = 30;
+            const dx = piece.x - piece.targetX;
+            const dy = piece.y - piece.targetY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < snapThreshold) {
+                piece.x = piece.targetX;
+                piece.y = piece.targetY;
+                piece.isPlaced = true;
+                piece.element.classList.add("placed");
+                this.updatePiecePosition(piece);
+                this.placedCount++;
+                this.updateUI();
+                
+                if (this.placedCount === this.totalPieces) {
+                    this.triggerWin();
+                }
+            }
         }
 
         updateUI() {
             const pct = Math.round((this.placedCount / this.totalPieces) * 100);
-            const bar = document.getElementById('progressBar');
-            const txt = document.getElementById('progressText');
-            if (bar) bar.style.width = `${pct}%`;
-            if (txt) txt.textContent = `Собрано ${this.placedCount} / ${this.totalPieces}`;
+            document.getElementById("progressBar").style.width = `${pct}%`;
+            document.getElementById("progressText").textContent = 
+                `Собрано ${this.placedCount} / ${this.totalPieces}`;
         }
 
         triggerWin() {
-            this.isWon = true;
-            const gift = document.getElementById('giftBlock');
-            if (gift) gift.style.display = 'block';
-            this.canvas.style.cursor = 'default';
-            const music = document.getElementById('bgMusic');
-            if (music) music.play().catch(() => {});
+            document.getElementById("giftBlock").style.display = "block";
+        }
+
+        render() {
+            // Initial render is done by DOM manipulation
         }
     }
 
+    // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         const puzzleId = '{{ puzzle_id }}';
-        const canvas = document.getElementById('puzzleCanvas');
-        if (!canvas) return;
-
         fetch(`/image/${puzzleId}`)
-            .then(res => {
-                if (!res.ok) throw new Error('Изображение не найдено');
-                return res.blob();
-            })
+            .then(res => res.blob())
             .then(blob => URL.createObjectURL(blob))
             .then(url => {
-                new PuzzleGame('puzzleCanvas', url, 5, 10);
+                new PuzzleGame('gameContainer', url, 5, 10);
             })
             .catch(err => {
-                console.error('Ошибка:', err);
-                document.getElementById('loading').textContent = 'Ошибка загрузки пазла';
-                document.getElementById('loading').style.background = 'rgba(255,0,0,0.8)';
+                console.error('Error:', err);
+                document.getElementById('loading').textContent = 'Ошибка загрузки';
             });
     });
-
-    let musicMuted = false;
-    function toggleMusic() {
-        const music = document.getElementById('bgMusic');
-        const btn = document.querySelector('.close-music');
-        if (!music) return;
-        musicMuted = !musicMuted;
-        music.muted = musicMuted;
-        btn.textContent = musicMuted ? '🔊 Включить музыку' : '🔇 Выключить музыку';
-    }
     </script>
 </body>
 </html>
