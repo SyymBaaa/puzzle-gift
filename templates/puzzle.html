@@ -1,39 +1,464 @@
-import os
-from pathlib import Path
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎁 Собери пазл</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a231a;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        #puzzleCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            z-index: 1;
+        }
+        #puzzleCanvas:active { cursor: grabbing; }
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            z-index: 10;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .header h1 { font-size: 24px; color: #333; margin-bottom: 5px; }
+        .header p { color: #666; font-size: 14px; }
+        .progress-container {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 25px;
+            border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .progress-bar {
+            width: 200px;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .progress-text { font-weight: 600; color: #333; min-width: 80px; }
+        .gift-block {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            z-index: 100;
+            text-align: center;
+            max-width: 90%;
+            width: 500px;
+            animation: slideIn 0.5s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translate(-50%, -40%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+        .gift-block h2 { color: #667eea; font-size: 32px; margin-bottom: 20px; }
+        .gift-block p { color: #666; margin-bottom: 15px; font-size: 16px; }
+        .gift-icon { font-size: 80px; margin-bottom: 20px; }
+        .download-btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 30px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .download-btn:hover { transform: scale(1.05); }
+        .close-music {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.9);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 10;
+            font-size: 14px;
+        }
+        .instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #666;
+            z-index: 10;
+        }
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 18px;
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">Загрузка пазла...</div>
+    <canvas id="puzzleCanvas"></canvas>
 
-# Директории
-BASE_DIR = Path(__file__).parent
-STATIC_DIR = BASE_DIR / "static"
-UPLOADS_DIR = BASE_DIR / "uploads"
-GENERATED_DIR = BASE_DIR / "generated"
+    <div class="header">
+        <h1> Собери пазл</h1>
+        <p>Дорогая, я знаю, как ты любишь пазлы, поэтому я подготовил тебе задачку, чтобы получить свой подарок! 😜</p>
+    </div>
 
-# Параметры обработки
-MAX_FILE_SIZE_MB = 20
-ALLOWED_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg'}
-PDF_DPI = 150
-FILE_LIFETIME_HOURS = 72  # 3 дня
+    <div class="progress-container">
+        <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
+        <div class="progress-text" id="progressText">Собрано 0 / 50</div>
+        <span>🎻</span>
+    </div>
 
-# Параметры рендеринга
-USER_IMAGE_OPACITY = 0.9
-BLUR_MASK = True
-FRAME_CORNERS = [
-    [100, 150],   # top-left
-    [700, 150],   # top-right
-    [700, 850],   # bottom-right
-    [100, 850]    # bottom-left
-]
+    <div class="instructions">
+        🖱️ Перетаскивай куски • Колёсико — зум • Зажми ЛКМ на пустом месте — панорама
+    </div>
 
-# Порядок наложения слоёв
-def get_render_order():
-    """
-    Порядок: сначала база, потом пользователь, потом оверлеи
-    """
-    return [
-        'frame',      # Рамка
-        'user',       # Фото пользователя
-        'overlay',    # Декоративные элементы
-    ]
+    <button class="close-music" onclick="toggleMusic()">🔇 Выключить музыку</button>
 
-# Создаём директории при импорте
-for dir_path in [STATIC_DIR, UPLOADS_DIR, GENERATED_DIR]:
-    dir_path.mkdir(parents=True, exist_ok=True)
+    <div class="gift-block" id="giftBlock">
+        <div class="gift-icon">🎂</div>
+        <h2>С днём рождения, любимая!</h2>
+        <p>Ты собрала пазл — а вот и подарок:</p>
+        <p><strong>🎁 Твой билет на концерт!</strong></p>
+        <p>📅 С нетерпением жду этого вечера с тобой!</p>
+        <a href="/download/{{ puzzle_id }}" class="download-btn" download>📎 Скачать билет</a>
+    </div>
+
+    <audio id="bgMusic" loop>
+        <source src="/static/music.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+    class PuzzleGame {
+        constructor(canvasId, imageUrl, rows = 5, cols = 10) {
+            this.canvas = document.getElementById(canvasId);
+            this.ctx = this.canvas.getContext('2d');
+            this.imageUrl = imageUrl;
+            this.rows = rows;
+            this.cols = cols;
+            this.pieces = [];
+            this.camera = { x: 0, y: 0, scale: 1 };
+            this.dragging = null;
+            this.dragOffset = { x: 0, y: 0 };
+            this.isPanning = false;
+            this.lastPointer = { x: 0, y: 0 };
+            this.placedCount = 0;
+            this.totalPieces = rows * cols;
+            this.board = { w: 0, h: 0 };
+            this.isWon = false;
+            this.image = null;
+
+            this.init();
+        }
+
+        async init() {
+            this.resize();
+            window.addEventListener('resize', () => this.resize());
+            this.bindEvents();
+
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = this.imageUrl;
+            
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error('Не удалось загрузить изображение'));
+            });
+            
+            this.image = img;
+            this.board.w = img.width;
+            this.board.h = img.height;
+            
+            this.createPieces();
+            this.setupCamera();
+            
+            document.getElementById('loading').style.display = 'none';
+            this.render();
+        }
+
+        resize() {
+            const dpr = window.devicePixelRatio || 1;
+            this.canvas.width = window.innerWidth * dpr;
+            this.canvas.height = window.innerHeight * dpr;
+            this.canvas.style.width = `${window.innerWidth}px`;
+            this.canvas.style.height = `${window.innerHeight}px`;
+            this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        createPieces() {
+            const pw = this.board.w / this.cols;
+            const ph = this.board.h / this.rows;
+            this.pieces = [];
+
+            for (let r = 0; r < this.rows; r++) {
+                for (let c = 0; c < this.cols; c++) {
+                    this.pieces.push({
+                        id: `${c}-${r}`,
+                        targetX: c * pw,
+                        targetY: r * ph,
+                        x: 0, y: 0,
+                        w: pw, h: ph,
+                        isPlaced: false,
+                        zIndex: Math.random()
+                    });
+                }
+            }
+            this.scatterPieces();
+        }
+
+        scatterPieces() {
+            const margin = 100;
+            const areaW = this.board.w + margin * 2;
+            const areaH = this.board.h + margin * 2;
+
+            this.pieces.forEach(p => {
+                p.x = (Math.random() - 0.5) * areaW;
+                p.y = (Math.random() - 0.5) * areaH;
+            });
+        }
+
+        setupCamera() {
+            const cw = window.innerWidth;
+            const ch = window.innerHeight;
+            const padding = 150;
+            const viewW = this.board.w + padding * 2;
+            const viewH = this.board.h + padding * 2;
+
+            this.camera.scale = Math.min(cw / viewW, ch / viewH, 1.0);
+            this.camera.x = cw / 2;
+            this.camera.y = ch / 2;
+        }
+
+        worldToScreen(wx, wy) {
+            return {
+                x: wx * this.camera.scale + this.camera.x,
+                y: wy * this.camera.scale + this.camera.y
+            };
+        }
+
+        screenToWorld(sx, sy) {
+            return {
+                x: (sx - this.camera.x) / this.camera.scale,
+                y: (sy - this.camera.y) / this.camera.scale
+            };
+        }
+
+        bindEvents() {
+            const onDown = (e) => {
+                e.preventDefault();
+                const pos = this.screenToWorld(e.clientX, e.clientY);
+
+                for (let i = this.pieces.length - 1; i >= 0; i--) {
+                    const p = this.pieces[i];
+                    if (p.isPlaced) continue;
+                    if (pos.x >= p.x && pos.x <= p.x + p.w && 
+                        pos.y >= p.y && pos.y <= p.y + p.h) {
+                        this.dragging = p;
+                        this.dragOffset = { x: pos.x - p.x, y: pos.y - p.y };
+                        p.zIndex = this.pieces.length + 1;
+                        this.canvas.style.cursor = 'grabbing';
+                        return;
+                    }
+                }
+
+                this.isPanning = true;
+                this.lastPointer = { x: e.clientX, y: e.clientY };
+                this.canvas.style.cursor = 'move';
+            };
+
+            const onMove = (e) => {
+                if (this.dragging) {
+                    const pos = this.screenToWorld(e.clientX, e.clientY);
+                    this.dragging.x = pos.x - this.dragOffset.x;
+                    this.dragging.y = pos.y - this.dragOffset.y;
+                    this.render();
+                } else if (this.isPanning) {
+                    const dx = e.clientX - this.lastPointer.x;
+                    const dy = e.clientY - this.lastPointer.y;
+                    this.camera.x += dx;
+                    this.camera.y += dy;
+                    this.lastPointer = { x: e.clientX, y: e.clientY };
+                    this.render();
+                }
+            };
+
+            const onUp = () => {
+                if (this.dragging) {
+                    const snapThreshold = 15 / this.camera.scale;
+                    const dx = this.dragging.x - this.dragging.targetX;
+                    const dy = this.dragging.y - this.dragging.targetY;
+                    const dist = Math.hypot(dx, dy);
+
+                    if (dist < snapThreshold) {
+                        this.dragging.x = this.dragging.targetX;
+                        this.dragging.y = this.dragging.targetY;
+                        this.dragging.isPlaced = true;
+                        this.placedCount++;
+                        this.updateUI();
+                        if (this.placedCount === this.totalPieces) {
+                            this.triggerWin();
+                        }
+                    }
+                    this.dragging = null;
+                    this.canvas.style.cursor = 'default';
+                }
+                this.isPanning = false;
+                this.render();
+            };
+
+            const onWheel = (e) => {
+                e.preventDefault();
+                const zoomFactor = e.deltaY > 0 ? 0.92 : 1.08;
+                const newScale = Math.max(0.3, Math.min(2.5, this.camera.scale * zoomFactor));
+
+                const worldBefore = this.screenToWorld(e.clientX, e.clientY);
+                this.camera.scale = newScale;
+                const worldAfter = this.screenToWorld(e.clientX, e.clientY);
+                this.camera.x += (worldAfter.x - worldBefore.x) * this.camera.scale;
+                this.camera.y += (worldAfter.y - worldBefore.y) * this.camera.scale;
+
+                this.render();
+            };
+
+            this.canvas.addEventListener('mousedown', onDown);
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+            this.canvas.addEventListener('wheel', onWheel, { passive: false });
+        }
+
+        render() {
+            if (!this.image) return;
+            const ctx = this.ctx;
+            ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+            ctx.save();
+            ctx.translate(this.camera.x, this.camera.y);
+            ctx.scale(this.camera.scale, this.camera.scale);
+
+            // Фон доски (рамка)
+            ctx.fillStyle = 'rgba(30, 40, 30, 0.8)';
+            ctx.fillRect(0, 0, this.board.w, this.board.h);
+            
+            // Обводка рамки
+            ctx.strokeStyle = '#8B7355';
+            ctx.lineWidth = 4 / this.camera.scale;
+            ctx.strokeRect(0, 0, this.board.w, this.board.h);
+
+            // Сетка
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1 / this.camera.scale;
+            for (let r = 1; r < this.rows; r++) {
+                const y = r * (this.board.h / this.rows);
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.board.w, y); ctx.stroke();
+            }
+            for (let c = 1; c < this.cols; c++) {
+                const x = c * (this.board.w / this.cols);
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.board.h); ctx.stroke();
+            }
+
+            // Рисуем куски
+            this.pieces.sort((a, b) => a.zIndex - b.zIndex);
+            this.pieces.forEach(p => {
+                if (p.isPlaced) ctx.globalAlpha = 0.3;
+                ctx.drawImage(this.image, p.targetX, p.targetY, p.w, p.h, p.x, p.y, p.w, p.h);
+                if (p.isPlaced) ctx.globalAlpha = 1;
+            });
+
+            ctx.restore();
+        }
+
+        updateUI() {
+            const pct = Math.round((this.placedCount / this.totalPieces) * 100);
+            const bar = document.getElementById('progressBar');
+            const txt = document.getElementById('progressText');
+            if (bar) bar.style.width = `${pct}%`;
+            if (txt) txt.textContent = `Собрано ${this.placedCount} / ${this.totalPieces}`;
+        }
+
+        triggerWin() {
+            this.isWon = true;
+            const gift = document.getElementById('giftBlock');
+            if (gift) gift.style.display = 'block';
+            this.canvas.style.cursor = 'default';
+            const music = document.getElementById('bgMusic');
+            if (music) music.play().catch(() => {});
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const puzzleId = '{{ puzzle_id }}';
+        const canvas = document.getElementById('puzzleCanvas');
+        if (!canvas) return;
+
+        fetch(`/image/${puzzleId}`)
+            .then(res => {
+                if (!res.ok) throw new Error('Изображение не найдено');
+                return res.blob();
+            })
+            .then(blob => URL.createObjectURL(blob))
+            .then(url => {
+                new PuzzleGame('puzzleCanvas', url, 5, 10);
+            })
+            .catch(err => {
+                console.error('Ошибка:', err);
+                document.getElementById('loading').textContent = 'Ошибка загрузки пазла';
+                document.getElementById('loading').style.background = 'rgba(255,0,0,0.8)';
+            });
+    });
+
+    let musicMuted = false;
+    function toggleMusic() {
+        const music = document.getElementById('bgMusic');
+        const btn = document.querySelector('.close-music');
+        if (!music) return;
+        musicMuted = !musicMuted;
+        music.muted = musicMuted;
+        btn.textContent = musicMuted ? '🔊 Включить музыку' : '🔇 Выключить музыку';
+    }
+    </script>
+</body>
+</html>
