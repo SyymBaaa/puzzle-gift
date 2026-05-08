@@ -10,6 +10,7 @@ let boardW, boardH;
 let scale = 1, panX = 0, panY = 0;
 let isDraggingWrapper = false;
 let wrapperDragStart = { x: 0, y: 0 };
+let snapHighlight = null; // для подсветки при притягивании
 
 // ========== ЗОНА СБОРКИ ==========
 let assemblyZone = {
@@ -17,7 +18,6 @@ let assemblyZone = {
 };
 
 function calculateAssemblyZone() {
-    // Зона сборки занимает 55% центральной части поля
     const zoneWidth = boardW * 0.55;
     const zoneHeight = boardH * 0.55;
     assemblyZone.x = (boardW - zoneWidth) / 2;
@@ -29,69 +29,117 @@ function calculateAssemblyZone() {
 function drawAssemblyZone() {
     ctx.save();
     
-    // Фон зоны сборки (светлый полупрозрачный)
-    ctx.fillStyle = "rgba(180, 200, 170, 0.1)";
+    // Внешняя тень для глубины
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    
+    // Основная заливка зоны сборки (мягкий градиент)
+    const gradient = ctx.createLinearGradient(assemblyZone.x, assemblyZone.y, assemblyZone.x + assemblyZone.w, assemblyZone.y + assemblyZone.h);
+    gradient.addColorStop(0, "rgba(200, 220, 180, 0.08)");
+    gradient.addColorStop(1, "rgba(170, 190, 150, 0.12)");
+    ctx.fillStyle = gradient;
     ctx.fillRect(assemblyZone.x, assemblyZone.y, assemblyZone.w, assemblyZone.h);
     
-    // Внешняя пунктирная рамка
+    ctx.shadowBlur = 0;
+    
+    // Золотая рамка с двойным контуром
+    ctx.shadowBlur = 3;
+    ctx.shadowColor = "rgba(212, 175, 90, 0.5)";
+    
+    // Внешняя рамка (толстая, золотая)
+    ctx.strokeStyle = "#e8c28e";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([]);
+    ctx.strokeRect(assemblyZone.x - 2, assemblyZone.y - 2, assemblyZone.w + 4, assemblyZone.h + 4);
+    
+    // Основная рамка
     ctx.strokeStyle = "#d4af5a";
     ctx.lineWidth = 3;
-    ctx.setLineDash([12, 8]);
     ctx.strokeRect(assemblyZone.x, assemblyZone.y, assemblyZone.w, assemblyZone.h);
     
-    // Внутренняя сплошная рамка
-    ctx.setLineDash([]);
-    ctx.strokeStyle = "#c9a458";
+    // Внутренняя рамка (более тонкая)
+    ctx.strokeStyle = "#f0d492";
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(assemblyZone.x + 5, assemblyZone.y + 5, assemblyZone.w - 10, assemblyZone.h - 10);
+    ctx.strokeRect(assemblyZone.x + 6, assemblyZone.y + 6, assemblyZone.w - 12, assemblyZone.h - 12);
     
-    // Угловые маркеры
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#e8c28e";
-    const markerSize = 22;
+    // Декоративные уголки (более насыщенные)
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#f5d98a";
+    const cornerSize = 28;
     
-    // Верхний левый
+    // Уголки с закруглением
     ctx.beginPath();
-    ctx.moveTo(assemblyZone.x, assemblyZone.y + markerSize);
+    ctx.moveTo(assemblyZone.x, assemblyZone.y + cornerSize);
     ctx.lineTo(assemblyZone.x, assemblyZone.y);
-    ctx.lineTo(assemblyZone.x + markerSize, assemblyZone.y);
+    ctx.lineTo(assemblyZone.x + cornerSize, assemblyZone.y);
     ctx.stroke();
     
-    // Верхний правый
     ctx.beginPath();
-    ctx.moveTo(assemblyZone.x + assemblyZone.w - markerSize, assemblyZone.y);
+    ctx.moveTo(assemblyZone.x + assemblyZone.w - cornerSize, assemblyZone.y);
     ctx.lineTo(assemblyZone.x + assemblyZone.w, assemblyZone.y);
-    ctx.lineTo(assemblyZone.x + assemblyZone.w, assemblyZone.y + markerSize);
+    ctx.lineTo(assemblyZone.x + assemblyZone.w, assemblyZone.y + cornerSize);
     ctx.stroke();
     
-    // Нижний правый
     ctx.beginPath();
-    ctx.moveTo(assemblyZone.x + assemblyZone.w, assemblyZone.y + assemblyZone.h - markerSize);
+    ctx.moveTo(assemblyZone.x + assemblyZone.w, assemblyZone.y + assemblyZone.h - cornerSize);
     ctx.lineTo(assemblyZone.x + assemblyZone.w, assemblyZone.y + assemblyZone.h);
-    ctx.lineTo(assemblyZone.x + assemblyZone.w - markerSize, assemblyZone.y + assemblyZone.h);
+    ctx.lineTo(assemblyZone.x + assemblyZone.w - cornerSize, assemblyZone.y + assemblyZone.h);
     ctx.stroke();
     
-    // Нижний левый
     ctx.beginPath();
-    ctx.moveTo(assemblyZone.x, assemblyZone.y + assemblyZone.h - markerSize);
+    ctx.moveTo(assemblyZone.x, assemblyZone.y + assemblyZone.h - cornerSize);
     ctx.lineTo(assemblyZone.x, assemblyZone.y + assemblyZone.h);
-    ctx.lineTo(assemblyZone.x + markerSize, assemblyZone.y + assemblyZone.h);
+    ctx.lineTo(assemblyZone.x + cornerSize, assemblyZone.y + assemblyZone.h);
     ctx.stroke();
     
-    // Текст "ЗОНА СБОРКИ"
-    ctx.font = "bold 13px 'Segoe UI', 'Georgia'";
-    ctx.fillStyle = "#ecd9b4";
+    // Декоративные точки по углам
+    ctx.fillStyle = "#f5d98a";
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.arc(assemblyZone.x - 4, assemblyZone.y - 4, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(assemblyZone.x + assemblyZone.w + 4, assemblyZone.y - 4, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(assemblyZone.x - 4, assemblyZone.y + assemblyZone.h + 4, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(assemblyZone.x + assemblyZone.w + 4, assemblyZone.y + assemblyZone.h + 4, 5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Заголовок с подложкой
     ctx.shadowBlur = 0;
-    ctx.fillText("✦ ЗОНА СБОРКИ ✦", assemblyZone.x + assemblyZone.w/2 - 65, assemblyZone.y - 10);
+    ctx.font = "bold 16px 'Segoe UI', 'Georgia'";
+    ctx.fillStyle = "#ecd9b4";
+    const titleWidth = ctx.measureText("✦ ЗОНА СБОРКИ ✦").width;
     
-    // Маленькие декоративные звёздочки по углам
-    ctx.font = "14px 'Segoe UI'";
+    // Подложка под текст
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(assemblyZone.x + assemblyZone.w/2 - titleWidth/2 - 10, assemblyZone.y - 28, titleWidth + 20, 28);
+    
+    ctx.fillStyle = "#f5d98a";
+    ctx.fillText("✦ ЗОНА СБОРКИ ✦", assemblyZone.x + assemblyZone.w/2 - titleWidth/2, assemblyZone.y - 12);
+    
+    // Светящиеся элементы по бокам
+    ctx.font = "18px 'Segoe UI'";
     ctx.fillStyle = "#e8c28e";
-    ctx.fillText("✦", assemblyZone.x - 8, assemblyZone.y - 5);
-    ctx.fillText("✦", assemblyZone.x + assemblyZone.w + 2, assemblyZone.y - 5);
-    ctx.fillText("✦", assemblyZone.x - 8, assemblyZone.y + assemblyZone.h + 8);
-    ctx.fillText("✦", assemblyZone.x + assemblyZone.w + 2, assemblyZone.y + assemblyZone.h + 8);
+    ctx.fillText("◈", assemblyZone.x - 18, assemblyZone.y + assemblyZone.h/2);
+    ctx.fillText("◈", assemblyZone.x + assemblyZone.w + 8, assemblyZone.y + assemblyZone.h/2);
     
+    ctx.restore();
+}
+
+// Подсветка при притягивании
+function drawSnapHighlight(targetX, targetY, w, h) {
+    if (!snapHighlight) return;
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#f5d98a";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.strokeRect(targetX - 2, targetY - 2, w + 4, h + 4);
+    ctx.setLineDash([]);
     ctx.restore();
 }
 
@@ -127,18 +175,33 @@ function getCanvasCoords(clientX, clientY) {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Фон
+    // Фон с текстурой
     ctx.fillStyle = "#1a2418";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Рисуем зону сборки (под пазлами, но над фоном)
+    // Сетка для фона (лёгкая текстура)
+    ctx.strokeStyle = "rgba(100, 120, 80, 0.15)";
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i < canvas.width; i += 50) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+    }
+    
     drawAssemblyZone();
     
-    // Рисуем все кусочки
     pieces.forEach(p => {
         if (selectedPiece === p) {
             ctx.shadowBlur = 20;
-            ctx.shadowColor = "rgba(255, 215, 0, 0.6)";
+            ctx.shadowColor = "rgba(255, 215, 0, 0.7)";
+        } else if (p.fixed) {
+            ctx.shadowBlur = 6;
+            ctx.shadowColor = "rgba(76, 175, 80, 0.4)";
         } else {
             ctx.shadowBlur = 4;
             ctx.shadowColor = "rgba(0,0,0,0.3)";

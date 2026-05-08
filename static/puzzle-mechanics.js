@@ -14,36 +14,24 @@ function loadPieceImage(pieceId) {
     });
 }
 
-// Проверка, находится ли кусочек вне зоны сборки
-function isOutsideAssemblyZone(piece) {
-    const margin = 20;
-    return (piece.x + piece.w + margin < assemblyZone.x ||
-            piece.x - margin > assemblyZone.x + assemblyZone.w ||
-            piece.y + piece.h + margin < assemblyZone.y ||
-            piece.y - margin > assemblyZone.y + assemblyZone.h);
-}
-
-// Получить случайную позицию вне зоны сборки
 function getRandomPositionOutsideAssembly(pieceW, pieceH) {
     const margin = 30;
     
-    for (let attempt = 0; attempt < 60; attempt++) {
-        // Зона разброса - вся область canvas, но с отступами
+    for (let attempt = 0; attempt < 80; attempt++) {
         const randX = margin + Math.random() * (boardW - pieceW - margin * 2);
         const randY = margin + Math.random() * (boardH - pieceH - margin * 2);
         
-        // Проверяем, не пересекается ли с зоной сборки
-        const overlapsAssembly = !(randX + pieceW + margin < assemblyZone.x ||
-                                   randX - margin > assemblyZone.x + assemblyZone.w ||
-                                   randY + pieceH + margin < assemblyZone.y ||
-                                   randY - margin > assemblyZone.y + assemblyZone.h);
+        const overlapsAssembly = !(randX + pieceW + 10 < assemblyZone.x ||
+                                   randX - 10 > assemblyZone.x + assemblyZone.w ||
+                                   randY + pieceH + 10 < assemblyZone.y ||
+                                   randY - 10 > assemblyZone.y + assemblyZone.h);
         
         if (!overlapsAssembly) {
             return { x: randX, y: randY };
         }
     }
     
-    // Если не нашли - кладём в левый верхний угол
+    // Если не нашли - кладём слева от зоны сборки
     return { x: 30, y: 30 };
 }
 
@@ -65,13 +53,12 @@ async function initPuzzle() {
         const cols = Math.ceil(Math.sqrt(piecesInfo.length));
         const rows = Math.ceil(piecesInfo.length / cols);
         
-        boardW = Math.max(900, maxDim * cols * 1.3);
-        boardH = Math.max(700, maxDim * rows * 1.3);
+        boardW = Math.max(1000, maxDim * cols * 1.4);
+        boardH = Math.max(800, maxDim * rows * 1.4);
         
         canvas.width = boardW;
         canvas.height = boardH;
         
-        // Вычисляем зону сборки после установки размеров
         calculateAssemblyZone();
         
         pieces = [];
@@ -86,8 +73,8 @@ async function initPuzzle() {
                 img: img,
                 x: randomX,
                 y: randomY,
-                correctX: info.correct_x + 100,
-                correctY: info.correct_y + 100,
+                correctX: info.correct_x + 150,
+                correctY: info.correct_y + 150,
                 w: info.width,
                 h: info.height,
                 fixed: false,
@@ -108,20 +95,23 @@ async function initPuzzle() {
 
 // ========== GROUP MANAGEMENT ==========
 function getGroup(piece) {
-    return piece.group ? piece.group.pieces : [piece];
+    if (!piece.group) return [piece];
+    return piece.group.pieces;
 }
 
 function mergeGroups(a, b) {
     const groupA = getGroup(a);
     const groupB = getGroup(b);
     
-    const merged = [...new Set([...groupA, ...groupB])];
-    const group = { pieces: merged };
+    if (groupA === groupB) return groupA;
     
-    merged.forEach(p => p.group = group);
+    const merged = [...new Set([...groupA, ...groupB])];
+    const groupObj = { pieces: merged };
+    
+    merged.forEach(p => p.group = groupObj);
+    return groupObj;
 }
 
-// Центрирование группы в зоне сборки
 function centerGroupInAssemblyZone(group) {
     if (!group || group.length === 0) return;
     
@@ -138,7 +128,6 @@ function centerGroupInAssemblyZone(group) {
     const groupWidth = maxX - minX;
     const groupHeight = maxY - minY;
     
-    // Центрируем в зоне сборки
     const targetX = assemblyZone.x + (assemblyZone.w - groupWidth) / 2;
     const targetY = assemblyZone.y + (assemblyZone.h - groupHeight) / 2;
     
@@ -151,59 +140,47 @@ function centerGroupInAssemblyZone(group) {
     });
 }
 
-// ========== SMART SNAP ==========
-function trySnapToAssemblyBorder(piece) {
+// ========== SNAP LOGIC (исправленное) ==========
+
+// Проверка притягивания к границе зоны сборки
+function checkBorderSnap(piece) {
     if (piece.fixed) return false;
-    if (getGroup(piece).length > 1) return false;
     
-    const threshold = 45;
-    let snapX = piece.x;
-    let snapY = piece.y;
+    const threshold = 50;
     let snapped = false;
+    let newX = piece.x;
+    let newY = piece.y;
     
-    // Притягивание к левой границе
+    // Притягивание к границам зоны сборки
     if (Math.abs(piece.x - assemblyZone.x) < threshold) {
-        snapX = assemblyZone.x;
+        newX = assemblyZone.x;
         snapped = true;
-    }
-    // Притягивание к правой границе
-    else if (Math.abs(piece.x + piece.w - (assemblyZone.x + assemblyZone.w)) < threshold) {
-        snapX = assemblyZone.x + assemblyZone.w - piece.w;
+    } else if (Math.abs(piece.x + piece.w - (assemblyZone.x + assemblyZone.w)) < threshold) {
+        newX = assemblyZone.x + assemblyZone.w - piece.w;
         snapped = true;
     }
     
-    // Притягивание к верхней границе
     if (Math.abs(piece.y - assemblyZone.y) < threshold) {
-        snapY = assemblyZone.y;
+        newY = assemblyZone.y;
         snapped = true;
-    }
-    // Притягивание к нижней границе
-    else if (Math.abs(piece.y + piece.h - (assemblyZone.y + assemblyZone.h)) < threshold) {
-        snapY = assemblyZone.y + assemblyZone.h - piece.h;
+    } else if (Math.abs(piece.y + piece.h - (assemblyZone.y + assemblyZone.h)) < threshold) {
+        newY = assemblyZone.y + assemblyZone.h - piece.h;
         snapped = true;
     }
     
     if (snapped) {
-        piece.x = snapX;
-        piece.y = snapY;
-        draw();
+        piece.x = newX;
+        piece.y = newY;
         return true;
     }
     return false;
 }
 
-function trySnap(piece) {
-    // Сначала проверяем притягивание к границе зоны сборки
-    if (trySnapToAssemblyBorder(piece)) {
-        return true;
-    }
+// Проверка притягивания к правильному месту
+function checkCorrectPositionSnap(piece) {
+    const distToCorrect = Math.hypot(piece.x - piece.correctX, piece.y - piece.correctY);
     
-    // 1. Проверяем притягивание к правильному месту
-    const dxToCorrect = piece.x - piece.correctX;
-    const dyToCorrect = piece.y - piece.correctY;
-    const distToCorrect = Math.hypot(dxToCorrect, dyToCorrect);
-    
-    if (distToCorrect < 45) {
+    if (distToCorrect < 50) {
         const group = getGroup(piece);
         const dx = piece.correctX - piece.x;
         const dy = piece.correctY - piece.y;
@@ -213,16 +190,17 @@ function trySnap(piece) {
             p.y += dy;
             p.fixed = true;
         });
-        
-        draw();
-        updateProgress();
         return true;
     }
-    
-    // 2. Проверяем притягивание к другим кусочкам
+    return false;
+}
+
+// Проверка притягивания к соседним кусочкам
+function checkNeighborSnap(piece) {
     for (const other of pieces) {
         if (piece === other) continue;
         
+        // Вычисляем, где должен быть этот кусочек относительно соседа
         const dx = piece.correctX - other.correctX;
         const dy = piece.correctY - other.correctY;
         const targetX = other.x + dx;
@@ -230,32 +208,59 @@ function trySnap(piece) {
         
         const distToOther = Math.hypot(piece.x - targetX, piece.y - targetY);
         
-        if (distToOther < 45) {
-            mergeGroups(piece, other);
+        if (distToOther < 50) {
+            // Объединяем группы
+            const mergedGroup = mergeGroups(piece, other);
             
-            const group = getGroup(piece);
+            // Сдвигаем всю объединённую группу
             const moveX = targetX - piece.x;
             const moveY = targetY - piece.y;
             
-            group.forEach(p => {
+            mergedGroup.pieces.forEach(p => {
                 if (!p.fixed) {
                     p.x += moveX;
                     p.y += moveY;
                 }
             });
             
-            // Центрируем группу в зоне сборки, если это первое объединение
-            if (group.length === 2 && !piece.fixed && !other.fixed) {
-                centerGroupInAssemblyZone(group);
+            // Центрируем группу в зоне сборки, если она новая
+            if (mergedGroup.pieces.length === 2 && !piece.fixed && !other.fixed) {
+                centerGroupInAssemblyZone(mergedGroup);
             }
             
-            draw();
-            updateProgress();
             return true;
         }
     }
-    
     return false;
+}
+
+// Главная функция притягивания
+function trySnap(piece) {
+    if (!piece || piece.fixed) return false;
+    
+    let snapped = false;
+    
+    // Сначала проверяем притягивание к границе зоны сборки
+    if (checkBorderSnap(piece)) {
+        snapped = true;
+    }
+    
+    // Проверяем притягивание к правильному месту
+    if (checkCorrectPositionSnap(piece)) {
+        snapped = true;
+    }
+    
+    // Проверяем притягивание к соседям
+    if (checkNeighborSnap(piece)) {
+        snapped = true;
+    }
+    
+    if (snapped) {
+        draw();
+        updateProgress();
+    }
+    
+    return snapped;
 }
 
 // ========== PIECE HIT TEST ==========
@@ -264,12 +269,8 @@ function getPieceAt(x, y) {
         const p = pieces[i];
         if (p.fixed) continue;
         
-        const group = getGroup(p);
-        for (const piece of group) {
-            if (x >= piece.x && x <= piece.x + piece.w && 
-                y >= piece.y && y <= piece.y + piece.h) {
-                return piece;
-            }
+        if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
+            return p;
         }
     }
     return null;
