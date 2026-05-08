@@ -11,6 +11,90 @@ let scale = 1, panX = 0, panY = 0;
 let isDraggingWrapper = false;
 let wrapperDragStart = { x: 0, y: 0 };
 
+// ========== ЗОНА СБОРКИ ==========
+let assemblyZone = {
+    x: 0, y: 0, w: 0, h: 0
+};
+
+function calculateAssemblyZone() {
+    // Зона сборки занимает 55% центральной части поля
+    const zoneWidth = boardW * 0.55;
+    const zoneHeight = boardH * 0.55;
+    assemblyZone.x = (boardW - zoneWidth) / 2;
+    assemblyZone.y = (boardH - zoneHeight) / 2;
+    assemblyZone.w = zoneWidth;
+    assemblyZone.h = zoneHeight;
+}
+
+function drawAssemblyZone() {
+    ctx.save();
+    
+    // Фон зоны сборки (светлый полупрозрачный)
+    ctx.fillStyle = "rgba(180, 200, 170, 0.1)";
+    ctx.fillRect(assemblyZone.x, assemblyZone.y, assemblyZone.w, assemblyZone.h);
+    
+    // Внешняя пунктирная рамка
+    ctx.strokeStyle = "#d4af5a";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 8]);
+    ctx.strokeRect(assemblyZone.x, assemblyZone.y, assemblyZone.w, assemblyZone.h);
+    
+    // Внутренняя сплошная рамка
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "#c9a458";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(assemblyZone.x + 5, assemblyZone.y + 5, assemblyZone.w - 10, assemblyZone.h - 10);
+    
+    // Угловые маркеры
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#e8c28e";
+    const markerSize = 22;
+    
+    // Верхний левый
+    ctx.beginPath();
+    ctx.moveTo(assemblyZone.x, assemblyZone.y + markerSize);
+    ctx.lineTo(assemblyZone.x, assemblyZone.y);
+    ctx.lineTo(assemblyZone.x + markerSize, assemblyZone.y);
+    ctx.stroke();
+    
+    // Верхний правый
+    ctx.beginPath();
+    ctx.moveTo(assemblyZone.x + assemblyZone.w - markerSize, assemblyZone.y);
+    ctx.lineTo(assemblyZone.x + assemblyZone.w, assemblyZone.y);
+    ctx.lineTo(assemblyZone.x + assemblyZone.w, assemblyZone.y + markerSize);
+    ctx.stroke();
+    
+    // Нижний правый
+    ctx.beginPath();
+    ctx.moveTo(assemblyZone.x + assemblyZone.w, assemblyZone.y + assemblyZone.h - markerSize);
+    ctx.lineTo(assemblyZone.x + assemblyZone.w, assemblyZone.y + assemblyZone.h);
+    ctx.lineTo(assemblyZone.x + assemblyZone.w - markerSize, assemblyZone.y + assemblyZone.h);
+    ctx.stroke();
+    
+    // Нижний левый
+    ctx.beginPath();
+    ctx.moveTo(assemblyZone.x, assemblyZone.y + assemblyZone.h - markerSize);
+    ctx.lineTo(assemblyZone.x, assemblyZone.y + assemblyZone.h);
+    ctx.lineTo(assemblyZone.x + markerSize, assemblyZone.y + assemblyZone.h);
+    ctx.stroke();
+    
+    // Текст "ЗОНА СБОРКИ"
+    ctx.font = "bold 13px 'Segoe UI', 'Georgia'";
+    ctx.fillStyle = "#ecd9b4";
+    ctx.shadowBlur = 0;
+    ctx.fillText("✦ ЗОНА СБОРКИ ✦", assemblyZone.x + assemblyZone.w/2 - 65, assemblyZone.y - 10);
+    
+    // Маленькие декоративные звёздочки по углам
+    ctx.font = "14px 'Segoe UI'";
+    ctx.fillStyle = "#e8c28e";
+    ctx.fillText("✦", assemblyZone.x - 8, assemblyZone.y - 5);
+    ctx.fillText("✦", assemblyZone.x + assemblyZone.w + 2, assemblyZone.y - 5);
+    ctx.fillText("✦", assemblyZone.x - 8, assemblyZone.y + assemblyZone.h + 8);
+    ctx.fillText("✦", assemblyZone.x + assemblyZone.w + 2, assemblyZone.y + assemblyZone.h + 8);
+    
+    ctx.restore();
+}
+
 // ========== DOM ELEMENTS ==========
 const canvas = document.getElementById('puzzleCanvas');
 const ctx = canvas.getContext('2d');
@@ -43,19 +127,14 @@ function getCanvasCoords(clientX, clientY) {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Фон
     ctx.fillStyle = "#1a2418";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    pieces.forEach(p => {
-        if (!p.fixed) {
-            ctx.strokeStyle = "rgba(255, 210, 90, 0.5)";
-            ctx.lineWidth = 2;
-            ctx.setLineDash([8, 6]);
-            ctx.strokeRect(p.correctX, p.correctY, p.w, p.h);
-            ctx.setLineDash([]);
-        }
-    });
+    // Рисуем зону сборки (под пазлами, но над фоном)
+    drawAssemblyZone();
     
+    // Рисуем все кусочки
     pieces.forEach(p => {
         if (selectedPiece === p) {
             ctx.shadowBlur = 20;
@@ -82,7 +161,7 @@ function updateProgress() {
     const total = pieces.length;
     const percent = (fixedCount / total) * 100;
     progressBar.style.width = `${percent}%`;
-    progressText.innerHTML = `Собрано ${fixedCount} / ${total}`;
+    progressText.innerHTML = `🧩 Собрано ${fixedCount} / ${total}`;
     checkWin();
 }
 

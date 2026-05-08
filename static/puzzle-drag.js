@@ -32,7 +32,7 @@ function onMouseMove(e) {
 function onMouseUp(e) {
     if (!gameStarted) return;
     if (selectedPiece && !selectedPiece.fixed) {
-        trySnapToCorrect(selectedPiece);
+        trySnap(selectedPiece);
         selectedPiece = null;
         draw();
     }
@@ -78,7 +78,7 @@ function onTouchEnd(e) {
     e.preventDefault();
     if (!gameStarted) return;
     if (selectedPiece && !selectedPiece.fixed) {
-        trySnapToCorrect(selectedPiece);
+        trySnap(selectedPiece);
         selectedPiece = null;
         draw();
     }
@@ -89,7 +89,7 @@ function onTouchEnd(e) {
 function onWheel(e) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    scale = Math.min(Math.max(0.05, scale + delta), 2);
+    scale = Math.min(Math.max(0.3, scale + delta), 2);
     updateTransform();
 }
 

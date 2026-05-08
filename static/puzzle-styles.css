@@ -136,11 +136,13 @@ canvas:active {
     bottom: 50px;
     left: 20px;
     color: #ffefcf;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     z-index: 45;
     background: rgba(0,0,0,0.5);
-    padding: 4px 12px;
+    padding: 6px 14px;
     border-radius: 20px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
 }
 
 .music-btn {
@@ -155,6 +157,12 @@ canvas:active {
     border: 1px solid #e2b870;
     cursor: pointer;
     color: #ffefcf;
+    transition: 0.2s;
+}
+
+.music-btn:hover {
+    background: #2a2418cc;
+    transform: scale(1.02);
 }
 
 .win-overlay {
@@ -186,12 +194,23 @@ canvas:active {
     text-align: center;
     border: 2px solid #e8c28e;
     max-width: 650px;
+    animation: winPulse 0.8s ease-out;
+}
+
+@keyframes winPulse {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 .win-content h2 {
     font-size: 2.5rem;
     color: #FFF5E0;
     margin-bottom: 20px;
+}
+
+.violin-icon {
+    font-size: 64px;
+    margin-bottom: 15px;
 }
 
 .ticket-info {
@@ -212,6 +231,12 @@ canvas:active {
     color: #FFF2D7;
     cursor: pointer;
     border: 1px solid #e8bc7a;
+    transition: 0.2s;
+}
+
+.win-content button:hover {
+    background: #8a5a2a;
+    transform: scale(1.02);
 }
 
 .hidden {
@@ -229,4 +254,16 @@ canvas:active {
     padding: 20px;
     border-radius: 10px;
     z-index: 300;
+}
+
+/* Анимация для новых кусочков */
+@keyframes pieceAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
