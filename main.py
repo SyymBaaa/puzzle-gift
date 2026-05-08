@@ -269,12 +269,20 @@ def create_mask_supersample(polygon, w, h, scale=4):
     return mask
 
 
-def cut_piece_from_image(img, polygon, output_path):
-    """Вырезает кусок из изображения по полигону с высоким качеством"""
+def cut_piece_from_image(img, polygon, output_path, expand_pixels=2):
+    """
+    Вырезает кусок из изображения по полигону с расширением маски
+    expand_pixels - сколько пикселей добавить к маске (для перекрытия стыков)
+    """
     h, w = img.shape[:2]
     
     # Создаем маску с антиалиасингом через supersampling
     mask = create_mask_supersample(polygon, w, h, scale=4)
+    
+    # РАСШИРЯЕМ МАСКУ - чтобы не было зазоров между кусочками
+    if expand_pixels > 0:
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (expand_pixels * 2 + 1, expand_pixels * 2 + 1))
+        mask = cv2.dilate(mask, kernel, iterations=1)
     
     # Конвертируем в RGBA если нужно
     if img.shape[2] == 3:
@@ -295,9 +303,10 @@ def cut_piece_from_image(img, polygon, output_path):
     cv2.imwrite(output_path, result, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
 
-def slice_image_by_svg_paths(image_path, txt_path, output_dir):
+def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
     """
     Разрезает изображение по всем path из текстового файла на фигурные кусочки
+    expand_pixels - расширение маски для перекрытия стыков (по умолчанию 2px)
     """
     if not SVG_SUPPORT:
         raise Exception("❌ SVG поддержка не установлена. Установите: pip install svgpath2mpl matplotlib")
@@ -315,6 +324,7 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir):
     
     h, w = img.shape[:2]
     print(f"🖼️ Размер изображения для нарезки: {w}x{h}")
+    print(f"🔧 Расширение маски: +{expand_pixels}px с каждой стороны")
     
     # Парсим пути
     paths = parse_svg_paths_from_file(txt_path)
@@ -340,12 +350,16 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir):
             # Трансформируем в координаты изображения
             transformed_poly = transform_polygon(main_polygon, w, h, bounds)
             
-            # Вырезаем кусочек
+            # Вырезаем кусочек с расширением маски
             piece_path = os.path.join(output_dir, f'piece_{i:03d}.png')
-            cut_piece_from_image(img, transformed_poly, piece_path)
+            cut_piece_from_image(img, transformed_poly, piece_path, expand_pixels)
             
             # Получаем размеры обрезанного кусочка
             piece_img = cv2.imread(piece_path, cv2.IMREAD_UNCHANGED)
+            if piece_img is None:
+                print(f"⚠️ Не удалось прочитать кусочек {i}")
+                continue
+                
             ph, pw = piece_img.shape[:2]
             
             pieces_data.append({
@@ -401,7 +415,10 @@ def generate_puzzle_image(user_file_bytes, filename, puzzle_id):
     if not SVG_SUPPORT:
         raise Exception("❌ SVG поддержка не установлена. Установите: pip install svgpath2mpl matplotlib")
     
-    pieces_data = slice_image_by_svg_paths(full_image_path, txt_path, pieces_dir)
+    # Расширение маски = 2 пикселя (половина толщины линии 4px)
+    # Это значение можно настроить через config, если нужно
+    expand_pixels = getattr(config, 'PUZZLE_EXPAND_PIXELS', 2)
+    pieces_data = slice_image_by_svg_paths(full_image_path, txt_path, pieces_dir, expand_pixels=expand_pixels)
     
     if not pieces_data:
         raise Exception("❌ Не удалось нарезать фигурные пазлы. Проверьте файл puzzle_shapes.txt")
