@@ -1,75 +1,104 @@
-// ========== ALPHA HIT ==========
-function isOpaquePixel(piece, x, y) {
-    const px = Math.floor((x - piece.x) / piece.w * piece.img.width);
-    const py = Math.floor((y - piece.y) / piece.h * piece.img.height);
-    if (px < 0 || py < 0 || px >= piece.img.width || py >= piece.img.height) return false;
-    const data = piece.hitCtx.getImageData(px, py, 1, 1).data;
-    return data[3] > 20;
+// ========== LOAD PUZZLE ==========
+async function loadPiecesInfo() {
+    const response = await fetch(`/pieces-info/${PUZZLE_ID}`);
+    if (!response.ok) throw new Error('Не удалось загрузить информацию о пазле');
+    return await response.json();
 }
 
-// ========== GROUPING ==========
-function getGroup(p) {
-    return p.group ? p.group.pieces : [p];
+function loadPieceImage(pieceId) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = `/piece/${PUZZLE_ID}/${pieceId}`;
+    });
 }
 
-function mergeGroups(a, b) {
-    const g1 = getGroup(a);
-    const g2 = getGroup(b);
-    const merged = [...new Set([...g1, ...g2])];
-    const group = { pieces: merged };
-    merged.forEach(p => p.group = group);
-}
-
-// ========== SNAP & WIN ==========
-function trySnap(p) {
-    if (Math.hypot(p.x - p.correctX, p.y - p.correctY) < 30) {
-        p.x = p.correctX;
-        p.y = p.correctY;
-        p.fixed = true;
-        checkWin();
-        return;
-    }
-
-    for (const other of pieces) {
-        if (p === other || other.fixed) continue;
-        const dx = p.correctX - other.correctX;
-        const dy = p.correctY - other.correctY;
-        const targetX = other.x + dx;
-        const targetY = other.y + dy;
-        if (Math.hypot(p.x - targetX, p.y - targetY) < 30) {
-            mergeGroups(p, other);
-            const g = getGroup(p);
-            g.forEach(x => {
-                x.x += (targetX - p.x);
-                x.y += (targetY - p.y);
+async function initPuzzle() {
+    loadingSpinner.classList.remove('hidden');
+    
+    try {
+        const piecesInfo = await loadPiecesInfo();
+        
+        if (piecesInfo.length === 0) {
+            throw new Error('Нет данных о кусочках пазла');
+        }
+        
+        let maxDim = 0;
+        piecesInfo.forEach(p => {
+            maxDim = Math.max(maxDim, p.width, p.height);
+        });
+        
+        const cols = Math.ceil(Math.sqrt(piecesInfo.length));
+        const rows = Math.ceil(piecesInfo.length / cols);
+        
+        boardW = Math.max(800, maxDim * cols * 1.2);
+        boardH = Math.max(600, maxDim * rows * 1.2);
+        
+        canvas.width = boardW;
+        canvas.height = boardH;
+        
+        pieces = [];
+        for (let i = 0; i < piecesInfo.length; i++) {
+            const info = piecesInfo[i];
+            const img = await loadPieceImage(info.id);
+            
+            const maxX = Math.max(50, boardW - info.width - 50);
+            const maxY = Math.max(50, boardH - info.height - 50);
+            const randomX = 50 + Math.random() * maxX;
+            const randomY = 50 + Math.random() * maxY;
+            
+            pieces.push({
+                id: info.id,
+                img: img,
+                x: randomX,
+                y: randomY,
+                correctX: info.correct_x + 100,
+                correctY: info.correct_y + 100,
+                w: info.width,
+                h: info.height,
+                fixed: false,
+                group: null
             });
-            return;
+        }
+        
+        updateProgress();
+        draw();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки пазла:', error);
+        alert('Не удалось загрузить пазл. Пожалуйста, обновите страницу.');
+    } finally {
+        loadingSpinner.classList.add('hidden');
+    }
+}
+
+// ========== SNAP ==========
+function trySnapToCorrect(piece) {
+    const snapDistance = 40;
+    const dx = piece.x - piece.correctX;
+    const dy = piece.y - piece.correctY;
+    const dist = Math.hypot(dx, dy);
+    
+    if (dist < snapDistance) {
+        piece.x = piece.correctX;
+        piece.y = piece.correctY;
+        piece.fixed = true;
+        draw();
+        updateProgress();
+        return true;
+    }
+    return false;
+}
+
+// ========== PIECE HIT TEST ==========
+function getPieceAt(x, y) {
+    for (let i = pieces.length - 1; i >= 0; i--) {
+        const p = pieces[i];
+        if (p.fixed) continue;
+        if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
+            return p;
         }
     }
+    return null;
 }
-
-function checkWin() {
-    if (pieces.every(p => p.fixed)) {
-        document.getElementById('winOverlay').classList.remove('hidden');
-    }
-}
-
-// ========== CAMERA ==========
-function updateTransform() {
-    wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
-}
-
-function resetView() {
-    scale = 1;
-    panX = 0;
-    panY = 0;
-    updateTransform();
-}
-
-// ========== WHEEL ZOOM ==========
-window.onwheel = e => {
-    if (!gameStarted) return;
-    e.preventDefault();
-    scale = clamp(scale + (e.deltaY > 0 ? -0.1 : 0.1), 0.4, 2.5);
-    updateTransform();
-};

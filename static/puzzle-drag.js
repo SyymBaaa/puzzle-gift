@@ -1,72 +1,107 @@
-// ========== GET PIECE UNDER MOUSE ==========
-function getPiece(m) {
-    for (let i = pieces.length - 1; i >= 0; i--) {
-        const p = pieces[i];
-        if (p.fixed) continue;
-        if (m.x >= p.x && m.x <= p.x + p.w &&
-            m.y >= p.y && m.y <= p.y + p.h &&
-            isOpaquePixel(p, m.x, m.y)) {
-            return p;
-        }
+// ========== MOUSE EVENTS ==========
+function onMouseDown(e) {
+    e.preventDefault();
+    if (!gameStarted) return;
+    const coord = getCanvasCoords(e.clientX, e.clientY);
+    const piece = getPieceAt(coord.x, coord.y);
+    if (piece) {
+        selectedPiece = piece;
+        dragOffsetX = coord.x - piece.x;
+        dragOffsetY = coord.y - piece.y;
+    } else {
+        isDraggingWrapper = true;
+        wrapperDragStart.x = e.clientX - panX;
+        wrapperDragStart.y = e.clientY - panY;
     }
-    return null;
 }
 
-// ========== MOUSE DOWN ==========
-canvas.onmousedown = e => {
+function onMouseMove(e) {
     if (!gameStarted) return;
-    const m = getMouse(e);
-    const piece = getPiece(m);
-
-    if (piece) {
-        dragMode = 'piece';
-        selectedPiece = piece;
-        const group = getGroup(piece);
-        const base = group[0];
-        dragOffsetX = m.x - base.x;
-        dragOffsetY = m.y - base.y;
-
-        // переупорядочиваем, чтобы группа рисовалась поверх
-        pieces = pieces.filter(p => !group.includes(p));
-        pieces.push(...group);
-    } else {
-        dragMode = 'canvas';
-    }
-};
-
-// ========== MOUSE MOVE ==========
-window.onmousemove = e => {
-    if (!gameStarted) return;
-    const m = getMouse(e);
-
-    if (dragMode === 'piece' && selectedPiece) {
-        const group = getGroup(selectedPiece);
-        const base = group[0];
-        const nx = m.x - dragOffsetX;
-        const ny = m.y - dragOffsetY;
-        const dx = nx - base.x;
-        const dy = ny - base.y;
-
-        group.forEach(p => {
-            if (!p.fixed) {
-                p.x = clamp(p.x + dx, -200, canvas.width + 200);
-                p.y = clamp(p.y + dy, -200, canvas.height + 200);
-            }
-        });
-    }
-
-    if (dragMode === 'canvas') {
-        panX += e.movementX;
-        panY += e.movementY;
+    if (selectedPiece && !selectedPiece.fixed) {
+        const coord = getCanvasCoords(e.clientX, e.clientY);
+        selectedPiece.x = coord.x - dragOffsetX;
+        selectedPiece.y = coord.y - dragOffsetY;
+        draw();
+    } else if (isDraggingWrapper) {
+        panX = e.clientX - wrapperDragStart.x;
+        panY = e.clientY - wrapperDragStart.y;
         updateTransform();
     }
-};
+}
 
-// ========== MOUSE UP ==========
-window.onmouseup = () => {
-    if (selectedPiece) {
-        getGroup(selectedPiece).forEach(trySnap);
+function onMouseUp(e) {
+    if (!gameStarted) return;
+    if (selectedPiece && !selectedPiece.fixed) {
+        trySnapToCorrect(selectedPiece);
+        selectedPiece = null;
+        draw();
     }
-    selectedPiece = null;
-    dragMode = null;
-};
+    isDraggingWrapper = false;
+}
+
+// ========== TOUCH EVENTS ==========
+function onTouchStart(e) {
+    e.preventDefault();
+    if (!gameStarted) return;
+    const touch = e.touches[0];
+    const coord = getCanvasCoords(touch.clientX, touch.clientY);
+    const piece = getPieceAt(coord.x, coord.y);
+    if (piece) {
+        selectedPiece = piece;
+        dragOffsetX = coord.x - piece.x;
+        dragOffsetY = coord.y - piece.y;
+    } else {
+        isDraggingWrapper = true;
+        wrapperDragStart.x = touch.clientX - panX;
+        wrapperDragStart.y = touch.clientY - panY;
+    }
+}
+
+function onTouchMove(e) {
+    e.preventDefault();
+    if (!gameStarted) return;
+    if (selectedPiece && !selectedPiece.fixed) {
+        const touch = e.touches[0];
+        const coord = getCanvasCoords(touch.clientX, touch.clientY);
+        selectedPiece.x = coord.x - dragOffsetX;
+        selectedPiece.y = coord.y - dragOffsetY;
+        draw();
+    } else if (isDraggingWrapper) {
+        const touch = e.touches[0];
+        panX = touch.clientX - wrapperDragStart.x;
+        panY = touch.clientY - wrapperDragStart.y;
+        updateTransform();
+    }
+}
+
+function onTouchEnd(e) {
+    e.preventDefault();
+    if (!gameStarted) return;
+    if (selectedPiece && !selectedPiece.fixed) {
+        trySnapToCorrect(selectedPiece);
+        selectedPiece = null;
+        draw();
+    }
+    isDraggingWrapper = false;
+}
+
+// ========== WHEEL ZOOM ==========
+function onWheel(e) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    scale = Math.min(Math.max(0.5, scale + delta), 2);
+    updateTransform();
+}
+
+// ========== REGISTER EVENT LISTENERS ==========
+function registerDragEvents() {
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('touchcancel', onTouchEnd);
+}
