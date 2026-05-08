@@ -31,7 +31,6 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH) {
         }
     }
     
-    // Если не нашли - кладём слева от зоны сборки
     return { x: 30, y: 30 };
 }
 
@@ -93,10 +92,15 @@ async function initPuzzle() {
     }
 }
 
-// ========== GROUP MANAGEMENT ==========
+// ========== GROUP MANAGEMENT (ИСПРАВЛЕНО) ==========
 function getGroup(piece) {
-    if (!piece.group) return [piece];
-    return piece.group.pieces;
+    if (!piece.group) {
+        const group = {
+            pieces: [piece]
+        };
+        piece.group = group;
+    }
+    return piece.group;
 }
 
 function mergeGroups(a, b) {
@@ -105,20 +109,25 @@ function mergeGroups(a, b) {
     
     if (groupA === groupB) return groupA;
     
-    const merged = [...new Set([...groupA, ...groupB])];
-    const groupObj = { pieces: merged };
+    const mergedPieces = [...groupA.pieces, ...groupB.pieces];
+    const mergedGroup = {
+        pieces: mergedPieces
+    };
     
-    merged.forEach(p => p.group = groupObj);
-    return groupObj;
+    mergedPieces.forEach(p => {
+        p.group = mergedGroup;
+    });
+    
+    return mergedGroup;
 }
 
 function centerGroupInAssemblyZone(group) {
-    if (!group || group.length === 0) return;
+    if (!group || group.pieces.length === 0) return;
     
     let minX = Infinity, minY = Infinity;
     let maxX = -Infinity, maxY = -Infinity;
     
-    group.forEach(p => {
+    group.pieces.forEach(p => {
         minX = Math.min(minX, p.x);
         minY = Math.min(minY, p.y);
         maxX = Math.max(maxX, p.x + p.w);
@@ -134,15 +143,26 @@ function centerGroupInAssemblyZone(group) {
     const dx = targetX - minX;
     const dy = targetY - minY;
     
-    group.forEach(p => {
+    group.pieces.forEach(p => {
         p.x += dx;
         p.y += dy;
     });
 }
 
-// ========== SNAP LOGIC (исправленное) ==========
+// ========== NEIGHBOR CHECK (ИСПРАВЛЕНО) ==========
+function areNeighbors(a, b) {
+    const dx = Math.abs(a.correctX - b.correctX);
+    const dy = Math.abs(a.correctY - b.correctY);
+    const tolerance = 20;
+    
+    const horizontal = Math.abs(dx - a.w) < tolerance && dy < tolerance;
+    const vertical = Math.abs(dy - a.h) < tolerance && dx < tolerance;
+    
+    return horizontal || vertical;
+}
 
-// Проверка притягивания к границе зоны сборки
+// ========== SNAP LOGIC (ИСПРАВЛЕНО) ==========
+
 function checkBorderSnap(piece) {
     if (piece.fixed) return false;
     
@@ -151,7 +171,6 @@ function checkBorderSnap(piece) {
     let newX = piece.x;
     let newY = piece.y;
     
-    // Притягивание к границам зоны сборки
     if (Math.abs(piece.x - assemblyZone.x) < threshold) {
         newX = assemblyZone.x;
         snapped = true;
@@ -169,38 +188,57 @@ function checkBorderSnap(piece) {
     }
     
     if (snapped) {
-        piece.x = newX;
-        piece.y = newY;
-        return true;
-    }
-    return false;
-}
-
-// Проверка притягивания к правильному месту
-function checkCorrectPositionSnap(piece) {
-    const distToCorrect = Math.hypot(piece.x - piece.correctX, piece.y - piece.correctY);
-    
-    if (distToCorrect < 50) {
         const group = getGroup(piece);
-        const dx = piece.correctX - piece.x;
-        const dy = piece.correctY - piece.y;
+        const dx = newX - piece.x;
+        const dy = newY - piece.y;
         
-        group.forEach(p => {
-            p.x += dx;
-            p.y += dy;
-            p.fixed = true;
+        group.pieces.forEach(p => {
+            if (!p.fixed) {
+                p.x += dx;
+                p.y += dy;
+            }
         });
         return true;
     }
     return false;
 }
 
-// Проверка притягивания к соседним кусочкам
+function checkCorrectPositionSnap(piece) {
+    const dx = piece.correctX - piece.x;
+    const dy = piece.correctY - piece.y;
+    const dist = Math.hypot(dx, dy);
+    
+    if (dist < 35) {
+        const group = getGroup(piece);
+        
+        // Сдвигаем всю группу
+        group.pieces.forEach(p => {
+            p.x += dx;
+            p.y += dy;
+        });
+        
+        // Проверяем каждый пазл отдельно (только если он точно на месте)
+        group.pieces.forEach(p => {
+            const d = Math.hypot(p.x - p.correctX, p.y - p.correctY);
+            if (d < 2) {
+                p.x = p.correctX;
+                p.y = p.correctY;
+                p.fixed = true;
+            }
+        });
+        
+        return true;
+    }
+    return false;
+}
+
 function checkNeighborSnap(piece) {
     for (const other of pieces) {
         if (piece === other) continue;
         
-        // Вычисляем, где должен быть этот кусочек относительно соседа
+        // Проверяем, являются ли они соседями по правильным координатам
+        if (!areNeighbors(piece, other)) continue;
+        
         const dx = piece.correctX - other.correctX;
         const dy = piece.correctY - other.correctY;
         const targetX = other.x + dx;
@@ -209,19 +247,20 @@ function checkNeighborSnap(piece) {
         const distToOther = Math.hypot(piece.x - targetX, piece.y - targetY);
         
         if (distToOther < 50) {
-            // Объединяем группы
             const mergedGroup = mergeGroups(piece, other);
             
-            // Сдвигаем всю объединённую группу
             const moveX = targetX - piece.x;
             const moveY = targetY - piece.y;
             
-            mergedGroup.pieces.forEach(p => {
-                if (!p.fixed) {
+            // Проверяем, есть ли в группе fixed кусочки
+            const hasFixed = mergedGroup.pieces.some(p => p.fixed);
+            
+            if (!hasFixed) {
+                mergedGroup.pieces.forEach(p => {
                     p.x += moveX;
                     p.y += moveY;
-                }
-            });
+                });
+            }
             
             // Центрируем группу в зоне сборки, если она новая
             if (mergedGroup.pieces.length === 2 && !piece.fixed && !other.fixed) {
@@ -234,26 +273,14 @@ function checkNeighborSnap(piece) {
     return false;
 }
 
-// Главная функция притягивания
 function trySnap(piece) {
     if (!piece || piece.fixed) return false;
     
     let snapped = false;
     
-    // Сначала проверяем притягивание к границе зоны сборки
-    if (checkBorderSnap(piece)) {
-        snapped = true;
-    }
-    
-    // Проверяем притягивание к правильному месту
-    if (checkCorrectPositionSnap(piece)) {
-        snapped = true;
-    }
-    
-    // Проверяем притягивание к соседям
-    if (checkNeighborSnap(piece)) {
-        snapped = true;
-    }
+    if (checkBorderSnap(piece)) snapped = true;
+    if (checkCorrectPositionSnap(piece)) snapped = true;
+    if (checkNeighborSnap(piece)) snapped = true;
     
     if (snapped) {
         draw();
@@ -274,4 +301,39 @@ function getPieceAt(x, y) {
         }
     }
     return null;
+}
+
+// ========== UPDATE PROGRESS ==========
+function updateProgress() {
+    let fixedCount = 0;
+    
+    for (const piece of pieces) {
+        if (piece.fixed) {
+            fixedCount++;
+        } else {
+            const distToCorrect = Math.hypot(piece.x - piece.correctX, piece.y - piece.correctY);
+            if (distToCorrect < 2) {
+                piece.fixed = true;
+                fixedCount++;
+            }
+        }
+    }
+    
+    const total = pieces.length;
+    const percent = (fixedCount / total) * 100;
+    progressBar.style.width = `${percent}%`;
+    progressText.innerHTML = `🧩 Собрано ${fixedCount} / ${total}`;
+    checkWin();
+}
+
+function checkWin() {
+    const allPlaced = pieces.length > 0 && pieces.every(p => p.fixed === true);
+    if (allPlaced && gameStarted && !winShown) {
+        winShown = true;
+        setTimeout(() => {
+            winOverlay.classList.remove("hidden");
+            winOverlay.classList.add("active");
+            if (audio && audioEnabled) audio.pause();
+        }, 500);
+    }
 }

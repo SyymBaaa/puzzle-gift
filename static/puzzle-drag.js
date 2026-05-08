@@ -22,15 +22,30 @@ function onMouseDown(e) {
 
 function onMouseMove(e) {
     if (!gameStarted) return;
+    
     if (selectedPiece && !selectedPiece.fixed) {
         const coord = getCanvasCoords(e.clientX, e.clientY);
-        selectedPiece.x = coord.x - dragOffsetX;
-        selectedPiece.y = coord.y - dragOffsetY;
         
-        // Показываем притягивание в реальном времени
+        const newX = coord.x - dragOffsetX;
+        const newY = coord.y - dragOffsetY;
+        
+        // Насколько сдвинули выбранный кусок
+        const dx = newX - selectedPiece.x;
+        const dy = newY - selectedPiece.y;
+        
+        // Двигаем ВСЮ ГРУППУ
+        const group = getGroup(selectedPiece);
+        
+        group.pieces.forEach(p => {
+            if (!p.fixed) {
+                p.x += dx;
+                p.y += dy;
+            }
+        });
+        
         showSnapPreview(selectedPiece);
-        
         draw();
+        
     } else if (isDraggingWrapper) {
         panX = e.clientX - wrapperDragStart.x;
         panY = e.clientY - wrapperDragStart.y;
@@ -50,12 +65,12 @@ function onMouseUp(e) {
     draw();
 }
 
-// Предпросмотр притягивания
 function showSnapPreview(piece) {
     snapHighlight = null;
     
-    // Проверяем притягивание к границе
     const threshold = 50;
+    
+    // Проверяем притягивание к границе
     if (Math.abs(piece.x - assemblyZone.x) < threshold) {
         snapHighlight = { x: assemblyZone.x, y: piece.y, w: piece.w, h: piece.h };
     } else if (Math.abs(piece.x + piece.w - (assemblyZone.x + assemblyZone.w)) < threshold) {
@@ -88,13 +103,29 @@ function onTouchStart(e) {
 function onTouchMove(e) {
     e.preventDefault();
     if (!gameStarted) return;
+    
     if (selectedPiece && !selectedPiece.fixed) {
         const touch = e.touches[0];
         const coord = getCanvasCoords(touch.clientX, touch.clientY);
-        selectedPiece.x = coord.x - dragOffsetX;
-        selectedPiece.y = coord.y - dragOffsetY;
+        
+        const newX = coord.x - dragOffsetX;
+        const newY = coord.y - dragOffsetY;
+        
+        const dx = newX - selectedPiece.x;
+        const dy = newY - selectedPiece.y;
+        
+        const group = getGroup(selectedPiece);
+        
+        group.pieces.forEach(p => {
+            if (!p.fixed) {
+                p.x += dx;
+                p.y += dy;
+            }
+        });
+        
         showSnapPreview(selectedPiece);
         draw();
+        
     } else if (isDraggingWrapper) {
         const touch = e.touches[0];
         panX = touch.clientX - wrapperDragStart.x;
@@ -119,8 +150,8 @@ function onTouchEnd(e) {
 // ========== WHEEL ZOOM ==========
 function onWheel(e) {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    scale = Math.min(Math.max(0.3, scale + delta), 2.5);
+    const delta = e.deltaY > 0 ? -0.08 : 0.08;
+    scale = Math.min(Math.max(0.4, scale + delta), 2.0);
     updateTransform();
 }
 

@@ -131,14 +131,14 @@ function drawAssemblyZone() {
 }
 
 // Подсветка при притягивании
-function drawSnapHighlight(targetX, targetY, w, h) {
+function drawSnapHighlight() {
     if (!snapHighlight) return;
     ctx.save();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = "#f5d98a";
     ctx.lineWidth = 3;
     ctx.setLineDash([8, 6]);
-    ctx.strokeRect(targetX - 2, targetY - 2, w + 4, h + 4);
+    ctx.strokeRect(snapHighlight.x - 2, snapHighlight.y - 2, snapHighlight.w + 4, snapHighlight.h + 4);
     ctx.setLineDash([]);
     ctx.restore();
 }
@@ -175,11 +175,11 @@ function getCanvasCoords(clientX, clientY) {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Фон с текстурой
+    // Фон
     ctx.fillStyle = "#1a2418";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Сетка для фона (лёгкая текстура)
+    // Лёгкая сетка фона для ориентации
     ctx.strokeStyle = "rgba(100, 120, 80, 0.15)";
     ctx.lineWidth = 0.5;
     for (let i = 0; i < canvas.width; i += 50) {
@@ -193,8 +193,13 @@ function draw() {
         ctx.stroke();
     }
     
+    // Рисуем зону сборки
     drawAssemblyZone();
     
+    // Рисуем подсветку притягивания
+    drawSnapHighlight();
+    
+    // Рисуем все кусочки
     pieces.forEach(p => {
         if (selectedPiece === p) {
             ctx.shadowBlur = 20;
