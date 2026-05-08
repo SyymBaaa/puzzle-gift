@@ -2,24 +2,54 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Пазл</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>🎁 Собери пазл</title>
     <link rel="stylesheet" href="/static/puzzle-styles.css">
 </head>
 <body>
 
-<div id="overlay">
-    <button id="startBtn">Начать</button>
-</div>
-
-<div id="winOverlay" class="hidden">
-    <h1>Готово 🎉</h1>
+<div class="overlay" id="overlay">
+    <div class="invite-text">
+        Дорогая, я знаю, как ты любишь пазлы,<br>
+        поэтому я подготовил тебе задачку, чтобы получить свой подарок! 😜
+    </div>
+    <button class="compass-btn" id="startBtn">
+        <svg viewBox="0 0 100 100" width="135" height="135">
+            <circle cx="50" cy="50" r="45" fill="#2c2416" stroke="#d4af5a" stroke-width="2"/>
+            <polygon points="50,15 58,45 50,85 42,45" fill="#d6a447"/>
+            <text x="50" y="32" text-anchor="middle" fill="#ecc87b" font-size="10" font-weight="bold">N</text>
+        </svg>
+    </button>
 </div>
 
 <div id="game" class="hidden">
-    <div id="puzzleWrapper">
-        <canvas id="puzzleCanvas"></canvas>
+    <div class="game-container">
+        <div class="puzzle-wrapper" id="puzzleWrapper">
+            <canvas id="puzzleCanvas"></canvas>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="progress-text" id="progressText">Собрано 0 / 0</div>
     </div>
 </div>
+
+<div id="winOverlay" class="win-overlay">
+    <div class="win-content">
+        <div class="violin-icon">🎻</div>
+        <h2>🎂 С днём рождения, любимая!</h2>
+        <p>Ты собрала пазл — а вот и подарок:</p>
+        <div class="ticket-info">
+            🎁 Твой билет на концерт!<br>
+            📅 С нетерпением жду этого вечера с тобой!
+        </div>
+        <button id="downloadTicketBtn">📎 Скачать билет</button>
+    </div>
+</div>
+
+<button id="musicToggle" class="music-btn hidden">🔇 Выключить музыку</button>
+
+<div id="loadingSpinner" class="loading-spinner hidden">Загрузка пазла... 🧩</div>
 
 <script>
     window.PUZZLE_ID = '{{ puzzle_id }}';
@@ -27,6 +57,48 @@
 <script src="/static/puzzle-core.js"></script>
 <script src="/static/puzzle-mechanics.js"></script>
 <script src="/static/puzzle-drag.js"></script>
+
+<script>
+    // ========== GAME CONTROLS ==========
+    function toggleMusic() {
+        if (audioEnabled) {
+            audio.pause();
+            audioEnabled = false;
+            musicToggle.innerHTML = "🔇 Включить музыку";
+        } else {
+            audio.play().catch(() => {});
+            audioEnabled = true;
+            musicToggle.innerHTML = "🔇 Выключить музыку";
+        }
+    }
+    
+    function downloadTicket() {
+        window.location.href = `/download/${PUZZLE_ID}`;
+    }
+    
+    async function startGame() {
+        if (gameStarted) return;
+        await initPuzzle();
+        gameStarted = true;
+        winShown = false;
+        overlay.classList.add("hidden");
+        gameDiv.classList.remove("hidden");
+        musicToggle.classList.remove("hidden");
+        if (audioEnabled) audio.play().catch(() => {});
+    }
+    
+    // Навешиваем обработчики
+    startBtn.onclick = startGame;
+    startBtn.ontouchstart = (e) => { e.preventDefault(); startGame(); };
+    
+    document.getElementById('downloadTicketBtn').onclick = downloadTicket;
+    musicToggle.onclick = toggleMusic;
+    
+    // Регистрируем события drag & drop
+    registerDragEvents();
+    
+    console.log('🎯 Puzzle page ready, puzzle_id:', PUZZLE_ID);
+</script>
 
 </body>
 </html>
