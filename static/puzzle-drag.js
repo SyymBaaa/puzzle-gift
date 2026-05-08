@@ -89,7 +89,7 @@ function onTouchEnd(e) {
 function onWheel(e) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    scale = Math.min(Math.max(0.5, scale + delta), 2);
+    scale = Math.min(Math.max(0.05, scale + delta), 2);
     updateTransform();
 }
 
