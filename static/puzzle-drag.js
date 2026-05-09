@@ -150,8 +150,9 @@ function onTouchEnd(e) {
 // ========== WHEEL ZOOM ==========
 function onWheel(e) {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.08 : 0.08;
-    scale = Math.min(Math.max(0.05, scale + delta), 2.0);
+    const delta = e.deltaY > 0 ? -0.05 : 0.05;  // ваш шаг 0.05
+    // Меняем ограничения: минимум 0.02 (можно отдалить сильнее), максимум 2.5
+    scale = Math.min(Math.max(0.02, scale + delta), 2.5);
     updateTransform();
 }
 

@@ -1,5 +1,9 @@
 const PUZZLE_ID = window.PUZZLE_ID;
 
+// Параметры зоны сборки (синхронизированы с серверным config.py)
+const SCATTER_MARGIN = 250;      // отступ для разброса кусочков от границ пазла
+const ZONE_VISUAL_MARGIN = 15;   // визуальный отступ рамки от реального пазла
+
 // ========== STATE ==========
 let pieces = [];
 let selectedPiece = null;
@@ -7,7 +11,7 @@ let dragOffsetX = 0, dragOffsetY = 0;
 let gameStarted = false;
 let winShown = false;
 let boardW, boardH;
-let scale = 1, panX = 0, panY = 0;
+let scale = 0.2, panX = 0, panY = 0;
 let isDraggingWrapper = false;
 let wrapperDragStart = { x: 0, y: 0 };
 let snapHighlight = null; // для подсветки при притягивании

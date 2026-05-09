@@ -2,25 +2,46 @@
 async function loadPiecesInfo() {
     const response = await fetch(`/pieces-info/${PUZZLE_ID}`);
     if (!response.ok) throw new Error('Не удалось загрузить информацию о пазле');
-    return await response.json();
-}
-
-function loadPieceImage(pieceId) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = `/piece/${PUZZLE_ID}/${pieceId}`;
-    });
-}
-
-function getRandomPositionOutsideAssembly(pieceW, pieceH) {
-    const margin = 30;
+    const data = await response.json();
     
-    for (let attempt = 0; attempt < 80; attempt++) {
+    // Новая структура: { pieces: [...], puzzle_width, puzzle_height, puzzle_min_x, puzzle_min_y }
+    // Для обратной совместимости, если data.pieces нет, значит data сам был массивом
+    if (data.pieces) {
+        return data;
+    } else {
+        // Легаси-режим: data сам массив кусочков
+        return { pieces: data, legacy: true };
+    }
+}
+
+function calculateAssemblyZoneFromBounds(puzzleWidth, puzzleHeight, visualMargin) {
+    // Рассчитываем зону сборки на основе реальных размеров пазла
+    const zoneWidth = puzzleWidth + visualMargin * 2;
+    const zoneHeight = puzzleHeight + visualMargin * 2;
+    
+    // Центрируем зону сборки на игровом поле
+    const zoneX = (boardW - zoneWidth) / 2;
+    const zoneY = (boardH - zoneHeight) / 2;
+    
+    return {
+        x: zoneX,
+        y: zoneY,
+        w: zoneWidth,
+        h: zoneHeight,
+        // Сохраняем также смещение для корректировки правильных координат кусочков
+        offsetX: zoneX - visualMargin,
+        offsetY: zoneY - visualMargin
+    };
+}
+
+function getRandomPositionOutsideAssembly(pieceW, pieceH, margin = 50) {
+    // Генерируем позицию строго ЗА пределами зоны сборки
+    const maxAttempts = 200;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const randX = margin + Math.random() * (boardW - pieceW - margin * 2);
         const randY = margin + Math.random() * (boardH - pieceH - margin * 2);
         
+        // Проверяем, не пересекается ли с зоной сборки
         const overlapsAssembly = !(randX + pieceW + 10 < assemblyZone.x ||
                                    randX - 10 > assemblyZone.x + assemblyZone.w ||
                                    randY + pieceH + 10 < assemblyZone.y ||
@@ -30,7 +51,7 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH) {
             return { x: randX, y: randY };
         }
     }
-    
+    // fallback
     return { x: 30, y: 30 };
 }
 
@@ -38,51 +59,88 @@ async function initPuzzle() {
     loadingSpinner.classList.remove('hidden');
     
     try {
-        const piecesInfo = await loadPiecesInfo();
+        const puzzleData = await loadPiecesInfo();
+        const piecesInfo = puzzleData.pieces;
+        const isLegacy = puzzleData.legacy || !puzzleData.puzzle_width;
         
         if (piecesInfo.length === 0) {
             throw new Error('Нет данных о кусочках пазла');
         }
         
-        let maxDim = 0;
-        piecesInfo.forEach(p => {
-            maxDim = Math.max(maxDim, p.width, p.height);
-        });
-        
-        const cols = Math.ceil(Math.sqrt(piecesInfo.length));
-        const rows = Math.ceil(piecesInfo.length / cols);
-        
-        boardW = Math.max(1000, maxDim * cols * 1.4);
-        boardH = Math.max(800, maxDim * rows * 1.4);
-        
-        canvas.width = boardW;
-        canvas.height = boardH;
-        
-        calculateAssemblyZone();
-        
-        pieces = [];
-        for (let i = 0; i < piecesInfo.length; i++) {
-            const info = piecesInfo[i];
-            const img = await loadPieceImage(info.id);
+        // Определяем размер игрового поля
+        if (!isLegacy && puzzleData.puzzle_width && puzzleData.puzzle_height) {
+            // НОВАЯ ЛОГИКА: размер поля = размер пазла + отступы для разброса кусочков
+            const margin = SCATTER_MARGIN; // 250px из конфига
+            boardW = puzzleData.puzzle_width + margin * 2;
+            boardH = puzzleData.puzzle_height + margin * 2;
             
-            const { x: randomX, y: randomY } = getRandomPositionOutsideAssembly(info.width, info.height);
+            // Минимальный размер для комфорта
+            boardW = Math.max(boardW, 800);
+            boardH = Math.max(boardH, 600);
             
-            pieces.push({
-                id: info.id,
-                img: img,
-                x: randomX,
-                y: randomY,
-                correctX: info.correct_x + 150,   // центр кусочка в собранном виде
-                correctY: info.correct_y + 150,
-                w: info.width,
-                h: info.height,
-                fixed: false,
-                group: null
+            canvas.width = boardW;
+            canvas.height = boardH;
+            
+            // Рассчитываем зону сборки (с учётом визуального отступа)
+            const visualMargin = ZONE_VISUAL_MARGIN; // 15px
+            const zone = calculateAssemblyZoneFromBounds(puzzleData.puzzle_width, puzzleData.puzzle_height, visualMargin);
+            assemblyZone = {
+                x: zone.x,
+                y: zone.y,
+                w: zone.w,
+                h: zone.h
+            };
+            
+            // Корректируем правильные координаты кусочков (сдвигаем в центр)
+            const shiftX = zone.offsetX - puzzleData.puzzle_min_x;
+            const shiftY = zone.offsetY - puzzleData.puzzle_min_y;
+            
+            pieces = [];
+            for (let i = 0; i < piecesInfo.length; i++) {
+                const info = piecesInfo[i];
+                const img = await loadPieceImage(info.id);
+                
+                // Корректируем правильные координаты
+                const correctedX = info.correct_x + shiftX;
+                const correctedY = info.correct_y + shiftY;
+                
+                const { x: randomX, y: randomY } = getRandomPositionOutsideAssembly(info.width, info.height, 50);
+                
+                pieces.push({
+                    id: info.id,
+                    img: img,
+                    x: randomX,
+                    y: randomY,
+                    correctX: correctedX,
+                    correctY: correctedY,
+                    w: info.width,
+                    h: info.height,
+                    fixed: false,
+                    group: null
+                });
+            }
+        } else {
+            // СТАРАЯ ЛОГИКА (обратная совместимость)
+            console.log("Используется легаси-режим (старый формат пазла)");
+            
+            let maxDim = 0;
+            piecesInfo.forEach(p => {
+                maxDim = Math.max(maxDim, p.width, p.height);
             });
+            const cols = Math.ceil(Math.sqrt(piecesInfo.length));
+            const rows = Math.ceil(piecesInfo.length / cols);
+            boardW = Math.max(1000, maxDim * cols * 1.4);
+            boardH = Math.max(800, maxDim * rows * 1.4);
+            canvas.width = boardW;
+            canvas.height = boardH;
+            calculateAssemblyZone(); // старый метод: 55% от canvas
         }
         
         updateProgress();
         draw();
+        
+        // Сброс камеры
+        resetView();
         
     } catch (error) {
         console.error('Ошибка загрузки пазла:', error);
@@ -124,6 +182,7 @@ function mergeGroups(a, b) {
 function centerGroupInAssemblyZone(group) {
     if (!group || group.pieces.length === 0) return;
     
+    // Вычисляем bounding box группы
     let minX = Infinity, minY = Infinity;
     let maxX = -Infinity, maxY = -Infinity;
     
@@ -137,6 +196,7 @@ function centerGroupInAssemblyZone(group) {
     const groupWidth = maxX - minX;
     const groupHeight = maxY - minY;
     
+    // Центрируем группу ВНУТРИ зоны сборки
     const targetX = assemblyZone.x + (assemblyZone.w - groupWidth) / 2;
     const targetY = assemblyZone.y + (assemblyZone.h - groupHeight) / 2;
     
@@ -149,27 +209,35 @@ function centerGroupInAssemblyZone(group) {
     });
 }
 
-// ========== NEIGHBOR CHECK (исправлено для центров) ==========
+// Обновлённая проверка соседей с использованием bounding box
 function areNeighbors(a, b) {
-    // correctX/Y — это центры кусочков
-    const dx = Math.abs(a.correctX - b.correctX);
-    const dy = Math.abs(a.correctY - b.correctY);
-    const tolerance = 25;
+    // Проверяем, соприкасаются ли bounding box'ы кусочков
+    const aRight = a.correctX + a.w / 2;
+    const aLeft = a.correctX - a.w / 2;
+    const aTop = a.correctY - a.h / 2;
+    const aBottom = a.correctY + a.h / 2;
     
-    // Сосед по горизонтали: центры по X отличаются на полусумму ширин, по Y — почти одинаково
-    const horizontal = Math.abs(dx - (a.w + b.w) / 2) < tolerance && dy < tolerance;
-    // Сосед по вертикали: центры по Y отличаются на полусумму высот, по X — почти одинаково
-    const vertical = Math.abs(dy - (a.h + b.h) / 2) < tolerance && dx < tolerance;
+    const bRight = b.correctX + b.w / 2;
+    const bLeft = b.correctX - b.w / 2;
+    const bTop = b.correctY - b.h / 2;
+    const bBottom = b.correctY + b.h / 2;
     
-    return horizontal || vertical;
+    // Горизонтальное соседство (бок о бок)
+    const horizontalNeighbor = Math.abs(aRight - bLeft) < 10 || Math.abs(aLeft - bRight) < 10;
+    const verticalOverlap = !(aBottom < bTop || aTop > bBottom);
+    
+    // Вертикальное соседство
+    const verticalNeighbor = Math.abs(aBottom - bTop) < 10 || Math.abs(aTop - bBottom) < 10;
+    const horizontalOverlap = !(aRight < bLeft || aLeft > bRight);
+    
+    return (horizontalNeighbor && verticalOverlap) || (verticalNeighbor && horizontalOverlap);
 }
 
-// ========== SNAP LOGIC (улучшенная) ==========
-
+// ========== SNAP LOGIC (адаптирована под новую зону сборки) ==========
 function checkBorderSnap(piece) {
     if (piece.fixed) return false;
     
-    const threshold = 50;
+    const threshold = 35;
     let snapped = false;
     let newX = piece.x;
     let newY = piece.y;
@@ -208,15 +276,14 @@ function checkBorderSnap(piece) {
 
 function checkCorrectPositionSnap(piece) {
     const group = getGroup(piece);
-    // Если в группе есть фиксированные, нельзя сдвигать всю группу
     const hasFixed = group.pieces.some(p => p.fixed);
     
     if (hasFixed) {
         // Проверяем только сам кусочек
         const dist = Math.hypot(piece.x - piece.correctX, piece.y - piece.correctY);
-        if (dist < 35) {
-            piece.x = piece.correctX;
-            piece.y = piece.correctY;
+        if (dist < 25) {
+            piece.x = piece.correctX - piece.w / 2;
+            piece.y = piece.correctY - piece.h / 2;
             piece.fixed = true;
             return true;
         }
@@ -224,22 +291,20 @@ function checkCorrectPositionSnap(piece) {
     }
     
     // Нет фиксированных — можно сдвинуть всю группу
-    const dx = piece.correctX - piece.x;
-    const dy = piece.correctY - piece.y;
+    const dx = piece.correctX - (piece.x + piece.w / 2);
+    const dy = piece.correctY - (piece.y + piece.h / 2);
     const dist = Math.hypot(dx, dy);
     
     if (dist < 35) {
-        // Сдвигаем всю группу
         group.pieces.forEach(p => {
             p.x += dx;
             p.y += dy;
         });
-        // Фиксируем те, которые точно на месте
         group.pieces.forEach(p => {
-            const d = Math.hypot(p.x - p.correctX, p.y - p.correctY);
-            if (d < 2) {
-                p.x = p.correctX;
-                p.y = p.correctY;
+            const d = Math.hypot((p.x + p.w / 2) - p.correctX, (p.y + p.h / 2) - p.correctY);
+            if (d < 5) {
+                p.x = p.correctX - p.w / 2;
+                p.y = p.correctY - p.h / 2;
                 p.fixed = true;
             }
         });
@@ -253,12 +318,13 @@ function checkNeighborSnap(piece) {
         if (piece === other) continue;
         if (!areNeighbors(piece, other)) continue;
         
-        // Желаемая позиция для piece относительно other
+        // Расчёт желаемой позиции piece относительно other
         const targetX = other.x + (piece.correctX - other.correctX);
         const targetY = other.y + (piece.correctY - other.correctY);
-        const dist = Math.hypot(piece.x - targetX, piece.y - targetY);
+        const dist = Math.hypot((piece.x + piece.w / 2) - (targetX + piece.w / 2), 
+                                (piece.y + piece.h / 2) - (targetY + piece.h / 2));
         
-        if (dist < 50) {
+        if (dist < 40) {
             const groupA = getGroup(piece);
             const groupB = getGroup(other);
             const mergedGroup = mergeGroups(piece, other);
@@ -266,7 +332,7 @@ function checkNeighborSnap(piece) {
             const hasFixed = mergedGroup.pieces.some(p => p.fixed);
             
             if (!hasFixed) {
-                // Нет фиксированных — двигаем всю объединённую группу
+                // Двигаем всю объединённую группу
                 const dx = targetX - piece.x;
                 const dy = targetY - piece.y;
                 mergedGroup.pieces.forEach(p => {
@@ -274,7 +340,7 @@ function checkNeighborSnap(piece) {
                     p.y += dy;
                 });
             } else {
-                // Есть фиксированные — двигаем только нефиксированную часть группы piece
+                // Двигаем только нефиксированную часть
                 const dx = targetX - piece.x;
                 const dy = targetY - piece.y;
                 groupA.pieces.forEach(p => {
@@ -290,6 +356,29 @@ function checkNeighborSnap(piece) {
     return false;
 }
 
+// Центрирование группы при соединении (вызывать после успешного снэпа)
+function tryCenterGroup(piece) {
+    // Если кусочек зафиксировался и в группе больше 1 элемента — центрируем
+    if (piece.fixed) {
+        const group = getGroup(piece);
+        if (group.pieces.length >= 2) {
+            // Проверяем, что вся группа внутри зоны сборки
+            let allInside = true;
+            for (const p of group.pieces) {
+                if (p.x < assemblyZone.x || p.x + p.w > assemblyZone.x + assemblyZone.w ||
+                    p.y < assemblyZone.y || p.y + p.h > assemblyZone.y + assemblyZone.h) {
+                    allInside = false;
+                    break;
+                }
+            }
+            if (!allInside) {
+                centerGroupInAssemblyZone(group);
+            }
+        }
+    }
+}
+
+// Обновлённый trySnap
 function trySnap(piece) {
     if (!piece || piece.fixed) return false;
     
@@ -302,55 +391,9 @@ function trySnap(piece) {
     if (snapped) {
         draw();
         updateProgress();
+        tryCenterGroup(piece);
+        draw();
     }
     
     return snapped;
-}
-
-// ========== PIECE HIT TEST ==========
-function getPieceAt(x, y) {
-    for (let i = pieces.length - 1; i >= 0; i--) {
-        const p = pieces[i];
-        if (p.fixed) continue;
-        
-        if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
-            return p;
-        }
-    }
-    return null;
-}
-
-// ========== UPDATE PROGRESS ==========
-function updateProgress() {
-    let fixedCount = 0;
-    
-    for (const piece of pieces) {
-        if (piece.fixed) {
-            fixedCount++;
-        } else {
-            const distToCorrect = Math.hypot(piece.x - piece.correctX, piece.y - piece.correctY);
-            if (distToCorrect < 2) {
-                piece.fixed = true;
-                fixedCount++;
-            }
-        }
-    }
-    
-    const total = pieces.length;
-    const percent = (fixedCount / total) * 100;
-    progressBar.style.width = `${percent}%`;
-    progressText.innerHTML = `🧩 Собрано ${fixedCount} / ${total}`;
-    checkWin();
-}
-
-function checkWin() {
-    const allPlaced = pieces.length > 0 && pieces.every(p => p.fixed === true);
-    if (allPlaced && gameStarted && !winShown) {
-        winShown = true;
-        setTimeout(() => {
-            winOverlay.classList.remove("hidden");
-            winOverlay.classList.add("active");
-            if (audio && audioEnabled) audio.pause();
-        }, 500);
-    }
 }
