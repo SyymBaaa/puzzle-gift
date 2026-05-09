@@ -35,7 +35,16 @@
 </div>
 
 <div id="winOverlay" class="win-overlay">
-    <div class="win-content">
+    <!-- Видео на весь экран фоном -->
+    <video id="winVideo" autoplay muted playsinline style="position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1;">
+        <source src="/static/background.mp4" type="video/mp4">
+    </video>
+
+    <!-- Затемнение для читаемости текста -->
+    <div style="position: absolute; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 2;"></div>
+
+    <!-- Контент поверх видео -->
+    <div class="win-content" style="position: relative; z-index: 3;">
         <div class="violin-icon">🎻</div>
         <h2>🎂 С днём рождения, любимая!</h2>
         <p>Ты собрала пазл — а вот и подарок:</p>
