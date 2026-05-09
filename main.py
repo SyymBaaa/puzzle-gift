@@ -250,10 +250,10 @@ def transform_polygon(polygon, img_w, img_h, bounds):
     poly[:, 1] += offset_y
     
     # Вычисляем bounding box трансформированного полигона
-    px_min = np.min(poly[:, 0])
-    px_max = np.max(poly[:, 0])
-    py_min = np.min(poly[:, 1])
-    py_max = np.max(poly[:, 1])
+    px_min = float(np.min(poly[:, 0]))  # конвертируем в float
+    px_max = float(np.max(poly[:, 0]))
+    py_min = float(np.min(poly[:, 1]))
+    py_max = float(np.max(poly[:, 1]))
     
     return poly, px_min, py_min, (px_max - px_min), (py_max - py_min)
 
@@ -383,17 +383,18 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
                 
             ph, pw = piece_img.shape[:2]
             
+            # КОНВЕРТИРУЕМ numpy типы в стандартные Python типы для JSON сериализации
             pieces_data.append({
-                'id': i,
+                'id': int(i),  # гарантируем int
                 'path': piece_path,
-                'correct_x': bbox_x,   # центр кусочка для прилипания
-                'correct_y': bbox_y,
-                'width': pw,
-                'height': ph,
-                'bbox_x': bbox_x,
-                'bbox_y': bbox_y,
-                'bbox_w': bbox_w,
-                'bbox_h': bbox_h
+                'correct_x': float(bbox_x),  # конвертируем в float
+                'correct_y': float(bbox_y),
+                'width': int(pw),  # конвертируем в int
+                'height': int(ph),
+                'bbox_x': float(bbox_x),
+                'bbox_y': float(bbox_y),
+                'bbox_w': float(bbox_w),
+                'bbox_h': float(bbox_h)
             })
             
             if (i + 1) % 10 == 0:
@@ -404,12 +405,12 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
             continue
     
     global_bounds = {
-        'min_x': global_min_x,
-        'min_y': global_min_y,
-        'max_x': global_max_x,
-        'max_y': global_max_y,
-        'width': global_max_x - global_min_x,
-        'height': global_max_y - global_min_y
+        'min_x': float(global_min_x),  # конвертируем в float
+        'min_y': float(global_min_y),
+        'max_x': float(global_max_x),
+        'max_y': float(global_max_y),
+        'width': float(global_max_x - global_min_x),  # конвертируем в float
+        'height': float(global_max_y - global_min_y)
     }
     
     print(f"🎉 Создано {len(pieces_data)} фигурных кусочков")
