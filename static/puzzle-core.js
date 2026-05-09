@@ -5,9 +5,9 @@ const SCATTER_MARGIN_X = 1900;    // отступ слева и справа (б
 const SCATTER_MARGIN_Y = 900;    // отступ сверху и снизу
 
 const ZONE_VISUAL_MARGIN = 0;
-const SNAP_THRESHOLD = 45;
-const GROUP_SNAP_THRESHOLD = 55;
-const BORDER_SNAP_THRESHOLD = 55;
+const SNAP_THRESHOLD = 70;
+const GROUP_SNAP_THRESHOLD = 60;
+const BORDER_SNAP_THRESHOLD = 60;
 
 let pieces = [];
 let selectedPiece = null;
