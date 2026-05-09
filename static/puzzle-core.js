@@ -674,6 +674,13 @@ function checkWin() {
         setTimeout(() => {
             winOverlay.classList.remove("hidden");
             winOverlay.classList.add("active");
+
+            // Запускаем видео
+            const video = document.getElementById('winVideo');
+            if (video) {
+                video.play().catch(e => console.log('Видео не запустилось:', e));
+            }
+
             if (audio && audioEnabled) audio.pause();
         }, 500);
     }
