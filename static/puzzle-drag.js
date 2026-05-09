@@ -436,13 +436,13 @@ function onWheel(e) {
 
     const delta =
         e.deltaY > 0
-            ? -0.05
-            : 0.05;
+            ? -0.02
+            : 0.02;
 
     scale =
         Math.min(
-            Math.max(0.02, scale + delta),
-            2.5
+            Math.max(0.2, scale + delta),
+            1.5
         );
 
     updateTransform();
