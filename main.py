@@ -54,6 +54,37 @@ templates = Jinja2Templates(directory="templates")
 puzzles_db = {}
 
 
+# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СЕРИАЛИЗАЦИИ ==========
+
+def convert_to_serializable(obj):
+    """
+    Рекурсивно преобразует numpy типы в стандартные Python типы для JSON сериализации
+    """
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {key: convert_to_serializable(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [convert_to_serializable(item) for item in obj]
+    return obj
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder for numpy data types"""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumpyEncoder, self).default(obj)
+
+
 # ========== ФУНКЦИИ ОБРАБОТКИ ИЗОБРАЖЕНИЙ ==========
 
 def pdf_to_image(pdf_bytes, dpi=None):
@@ -228,6 +259,7 @@ def transform_polygon(polygon, img_w, img_h, bounds):
     """
     Трансформирует полигон в координаты изображения.
     Возвращает (transformed_poly, bbox_x, bbox_y, bbox_w, bbox_h)
+    Все значения преобразуются в стандартные float для JSON сериализации
     """
     min_x, min_y, max_x, max_y = bounds
     
@@ -255,7 +287,8 @@ def transform_polygon(polygon, img_w, img_h, bounds):
     py_min = np.min(poly[:, 1])
     py_max = np.max(poly[:, 1])
     
-    return poly, px_min, py_min, (px_max - px_min), (py_max - py_min)
+    # Возвращаем как стандартные float (не numpy типы)
+    return poly, float(px_min), float(py_min), float(px_max - px_min), float(py_max - py_min)
 
 
 def create_mask_supersample(polygon, w, h, scale=4):
@@ -318,6 +351,7 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
     expand_pixels - расширение маски для перекрытия стыков (по умолчанию 2px)
     Возвращает (pieces_data, global_bounds)
     где global_bounds = {'min_x': ..., 'min_y': ..., 'max_x': ..., 'max_y': ..., 'width': ..., 'height': ...}
+    Все значения преобразуются в стандартные Python типы для JSON сериализации
     """
     if not SVG_SUPPORT:
         raise Exception("❌ SVG поддержка не установлена. Установите: pip install svgpath2mpl matplotlib")
@@ -365,11 +399,11 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
             # Трансформируем в координаты изображения и получаем bounding box
             transformed_poly, bbox_x, bbox_y, bbox_w, bbox_h = transform_polygon(main_polygon, w, h, bounds)
             
-            # Обновляем глобальный bounding box
-            global_min_x = min(global_min_x, bbox_x)
-            global_min_y = min(global_min_y, bbox_y)
-            global_max_x = max(global_max_x, bbox_x + bbox_w)
-            global_max_y = max(global_max_y, bbox_y + bbox_h)
+            # Обновляем глобальный bounding box (используем float для безопасности)
+            global_min_x = min(global_min_x, float(bbox_x))
+            global_min_y = min(global_min_y, float(bbox_y))
+            global_max_x = max(global_max_x, float(bbox_x + bbox_w))
+            global_max_y = max(global_max_y, float(bbox_y + bbox_h))
             
             # Вырезаем кусочек с расширением маски
             piece_path = os.path.join(output_dir, f'piece_{i:03d}.png')
@@ -383,17 +417,18 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
                 
             ph, pw = piece_img.shape[:2]
             
+            # ВАЖНО: преобразуем все значения в стандартные Python типы
             pieces_data.append({
-                'id': i,
-                'path': piece_path,
-                'correct_x': bbox_x + bbox_w / 2,   # центр кусочка для прилипания
-                'correct_y': bbox_y + bbox_h / 2,
-                'width': pw,
-                'height': ph,
-                'bbox_x': bbox_x,
-                'bbox_y': bbox_y,
-                'bbox_w': bbox_w,
-                'bbox_h': bbox_h
+                'id': int(i),
+                'path': str(piece_path),
+                'correct_x': float(bbox_x + bbox_w / 2),
+                'correct_y': float(bbox_y + bbox_h / 2),
+                'width': int(pw),
+                'height': int(ph),
+                'bbox_x': float(bbox_x),
+                'bbox_y': float(bbox_y),
+                'bbox_w': float(bbox_w),
+                'bbox_h': float(bbox_h)
             })
             
             if (i + 1) % 10 == 0:
@@ -403,13 +438,14 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
             print(f"⚠️ Ошибка в кусочке {i}: {e}")
             continue
     
+    # Преобразуем глобальные границы в стандартные Python типы
     global_bounds = {
-        'min_x': global_min_x,
-        'min_y': global_min_y,
-        'max_x': global_max_x,
-        'max_y': global_max_y,
-        'width': global_max_x - global_min_x,
-        'height': global_max_y - global_min_y
+        'min_x': float(global_min_x),
+        'min_y': float(global_min_y),
+        'max_x': float(global_max_x),
+        'max_y': float(global_max_y),
+        'width': float(global_max_x - global_min_x),
+        'height': float(global_max_y - global_min_y)
     }
     
     print(f"🎉 Создано {len(pieces_data)} фигурных кусочков")
@@ -450,7 +486,7 @@ def generate_puzzle_image(user_file_bytes, filename, puzzle_id):
     if not SVG_SUPPORT:
         raise Exception("❌ SVG поддержка не установлена. Установите: pip install svgpath2mpl matplotlib")
     
-    # Расширение маски = 2 пикселя (половина толщины линии 4px)
+    # Расширение маски
     expand_pixels = getattr(config, 'PUZZLE_EXPAND_PIXELS', 3)
     pieces_data, global_bounds = slice_image_by_svg_paths(full_image_path, txt_path, pieces_dir, expand_pixels=expand_pixels)
     
@@ -527,14 +563,22 @@ async def upload_ticket(user_image: UploadFile = File(...)):
 
         # Сохраняем информацию о кусочках вместе с габаритами пазла
         pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
-        with open(pieces_info_path, 'w') as f:
-            json.dump({
-                'pieces': pieces_data,
-                'puzzle_width': global_bounds['width'],
-                'puzzle_height': global_bounds['height'],
-                'puzzle_min_x': global_bounds['min_x'],
-                'puzzle_min_y': global_bounds['min_y']
-            }, f, indent=2)
+        
+        # Подготавливаем данные для сохранения
+        data_to_save = {
+            'pieces': pieces_data,
+            'puzzle_width': global_bounds['width'],
+            'puzzle_height': global_bounds['height'],
+            'puzzle_min_x': global_bounds['min_x'],
+            'puzzle_min_y': global_bounds['min_y']
+        }
+        
+        # Преобразуем все numpy типы в стандартные Python типы (на всякий случай)
+        data_to_save = convert_to_serializable(data_to_save)
+        
+        # Сохраняем JSON
+        with open(pieces_info_path, 'w', encoding='utf-8') as f:
+            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
 
         # Сохраняем в БД
         puzzles_db[puzzle_id] = {
@@ -559,6 +603,7 @@ async def upload_ticket(user_image: UploadFile = File(...)):
         # При ошибке удаляем сохранённый оригинал
         if os.path.exists(original_path):
             os.remove(original_path)
+        print(f"❌ Ошибка при генерации пазла: {e}")
         raise HTTPException(500, str(e))
 
 
@@ -612,7 +657,7 @@ async def get_pieces_info(puzzle_id: str):
     
     pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
     if os.path.exists(pieces_info_path):
-        with open(pieces_info_path, 'r') as f:
+        with open(pieces_info_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             # Для обратной совместимости: если в старом файле нет поля 'pieces', значит он был массивом
             if isinstance(data, list):
