@@ -417,7 +417,7 @@ def generate_puzzle_image(user_file_bytes, filename, puzzle_id):
     
     # Расширение маски = 2 пикселя (половина толщины линии 4px)
     # Это значение можно настроить через config, если нужно
-    expand_pixels = getattr(config, 'PUZZLE_EXPAND_PIXELS', 2)
+    expand_pixels = getattr(config, 'PUZZLE_EXPAND_PIXELS', 3)
     pieces_data = slice_image_by_svg_paths(full_image_path, txt_path, pieces_dir, expand_pixels=expand_pixels)
     
     if not pieces_data:
