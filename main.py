@@ -225,7 +225,10 @@ def get_svg_bounds(paths_list):
 
 
 def transform_polygon(polygon, img_w, img_h, bounds):
-    """Трансформирует полигон в координаты изображения"""
+    """
+    Трансформирует полигон в координаты изображения.
+    Возвращает (transformed_poly, bbox_x, bbox_y, bbox_w, bbox_h)
+    """
     min_x, min_y, max_x, max_y = bounds
     
     poly = np.array(polygon, dtype=np.float32)
@@ -246,7 +249,13 @@ def transform_polygon(polygon, img_w, img_h, bounds):
     poly[:, 0] += offset_x
     poly[:, 1] += offset_y
     
-    return poly
+    # Вычисляем bounding box трансформированного полигона
+    px_min = np.min(poly[:, 0])
+    px_max = np.max(poly[:, 0])
+    py_min = np.min(poly[:, 1])
+    py_max = np.max(poly[:, 1])
+    
+    return poly, px_min, py_min, (px_max - px_min), (py_max - py_min)
 
 
 def create_mask_supersample(polygon, w, h, scale=4):
@@ -307,6 +316,8 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
     """
     Разрезает изображение по всем path из текстового файла на фигурные кусочки
     expand_pixels - расширение маски для перекрытия стыков (по умолчанию 2px)
+    Возвращает (pieces_data, global_bounds)
+    где global_bounds = {'min_x': ..., 'min_y': ..., 'max_x': ..., 'max_y': ..., 'width': ..., 'height': ...}
     """
     if not SVG_SUPPORT:
         raise Exception("❌ SVG поддержка не установлена. Установите: pip install svgpath2mpl matplotlib")
@@ -329,11 +340,15 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
     # Парсим пути
     paths = parse_svg_paths_from_file(txt_path)
     
-    # Вычисляем bounding box
+    # Вычисляем bounding box SVG
     bounds = get_svg_bounds(paths)
     print(f"📐 SVG bounds: ({bounds[0]:.1f}, {bounds[1]:.1f}) -> ({bounds[2]:.1f}, {bounds[3]:.1f})")
     
     pieces_data = []
+    global_min_x = float('inf')
+    global_min_y = float('inf')
+    global_max_x = float('-inf')
+    global_max_y = float('-inf')
     
     for i, path_str in enumerate(paths):
         try:
@@ -347,8 +362,14 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
             # Берем самый большой полигон (основной контур)
             main_polygon = max(polygons, key=lambda p: len(p))
             
-            # Трансформируем в координаты изображения
-            transformed_poly = transform_polygon(main_polygon, w, h, bounds)
+            # Трансформируем в координаты изображения и получаем bounding box
+            transformed_poly, bbox_x, bbox_y, bbox_w, bbox_h = transform_polygon(main_polygon, w, h, bounds)
+            
+            # Обновляем глобальный bounding box
+            global_min_x = min(global_min_x, bbox_x)
+            global_min_y = min(global_min_y, bbox_y)
+            global_max_x = max(global_max_x, bbox_x + bbox_w)
+            global_max_y = max(global_max_y, bbox_y + bbox_h)
             
             # Вырезаем кусочек с расширением маски
             piece_path = os.path.join(output_dir, f'piece_{i:03d}.png')
@@ -365,12 +386,14 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
             pieces_data.append({
                 'id': i,
                 'path': piece_path,
-                'correct_x': pw // 2,
-                'correct_y': ph // 2,
+                'correct_x': bbox_x + bbox_w / 2,   # центр кусочка для прилипания
+                'correct_y': bbox_y + bbox_h / 2,
                 'width': pw,
                 'height': ph,
-                'bbox_x': 0,
-                'bbox_y': 0
+                'bbox_x': bbox_x,
+                'bbox_y': bbox_y,
+                'bbox_w': bbox_w,
+                'bbox_h': bbox_h
             })
             
             if (i + 1) % 10 == 0:
@@ -380,12 +403,24 @@ def slice_image_by_svg_paths(image_path, txt_path, output_dir, expand_pixels=2):
             print(f"⚠️ Ошибка в кусочке {i}: {e}")
             continue
     
+    global_bounds = {
+        'min_x': global_min_x,
+        'min_y': global_min_y,
+        'max_x': global_max_x,
+        'max_y': global_max_y,
+        'width': global_max_x - global_min_x,
+        'height': global_max_y - global_min_y
+    }
+    
     print(f"🎉 Создано {len(pieces_data)} фигурных кусочков")
-    return pieces_data
+    print(f"📦 Глобальный bounds пазла: {global_bounds}")
+    return pieces_data, global_bounds
 
 
 def generate_puzzle_image(user_file_bytes, filename, puzzle_id):
-    """Генерирует цельное изображение + нарезает фигурные пазлы"""
+    """Генерирует цельное изображение + нарезает фигурные пазлы.
+    Возвращает (full_image_path, pieces_data, global_bounds)
+    """
     ext = os.path.splitext(filename)[1].lower()
     
     if ext == '.pdf':
@@ -416,19 +451,13 @@ def generate_puzzle_image(user_file_bytes, filename, puzzle_id):
         raise Exception("❌ SVG поддержка не установлена. Установите: pip install svgpath2mpl matplotlib")
     
     # Расширение маски = 2 пикселя (половина толщины линии 4px)
-    # Это значение можно настроить через config, если нужно
     expand_pixels = getattr(config, 'PUZZLE_EXPAND_PIXELS', 3)
-    pieces_data = slice_image_by_svg_paths(full_image_path, txt_path, pieces_dir, expand_pixels=expand_pixels)
+    pieces_data, global_bounds = slice_image_by_svg_paths(full_image_path, txt_path, pieces_dir, expand_pixels=expand_pixels)
     
     if not pieces_data:
         raise Exception("❌ Не удалось нарезать фигурные пазлы. Проверьте файл puzzle_shapes.txt")
     
-    # Сохраняем информацию о кусочках в JSON
-    pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
-    with open(pieces_info_path, 'w') as f:
-        json.dump(pieces_data, f, indent=2)
-    
-    return full_image_path, pieces_data
+    return full_image_path, pieces_data, global_bounds
 
 
 # ========== ОЧИСТКА СТАРЫХ ФАЙЛОВ ==========
@@ -494,7 +523,18 @@ async def upload_ticket(user_image: UploadFile = File(...)):
 
     try:
         # Генерируем цельное изображение и нарезаем пазлы
-        full_image_path, pieces_data = generate_puzzle_image(contents, filename, puzzle_id)
+        full_image_path, pieces_data, global_bounds = generate_puzzle_image(contents, filename, puzzle_id)
+
+        # Сохраняем информацию о кусочках вместе с габаритами пазла
+        pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
+        with open(pieces_info_path, 'w') as f:
+            json.dump({
+                'pieces': pieces_data,
+                'puzzle_width': global_bounds['width'],
+                'puzzle_height': global_bounds['height'],
+                'puzzle_min_x': global_bounds['min_x'],
+                'puzzle_min_y': global_bounds['min_y']
+            }, f, indent=2)
 
         # Сохраняем в БД
         puzzles_db[puzzle_id] = {
@@ -566,16 +606,23 @@ async def get_piece(puzzle_id: str, piece_id: int):
 
 @app.get("/pieces-info/{puzzle_id}")
 async def get_pieces_info(puzzle_id: str):
-    """Возвращает информацию о кусочках (позиции, размеры)"""
+    """Возвращает информацию о кусочках (позиции, размеры, а также габариты пазла, если есть)"""
     if puzzle_id not in puzzles_db:
         raise HTTPException(404, "Пазл не найден")
     
     pieces_info_path = os.path.join(config.GENERATED_DIR, f"{puzzle_id}_pieces.json")
     if os.path.exists(pieces_info_path):
         with open(pieces_info_path, 'r') as f:
-            return JSONResponse(json.load(f))
+            data = json.load(f)
+            # Для обратной совместимости: если в старом файле нет поля 'pieces', значит он был массивом
+            if isinstance(data, list):
+                return JSONResponse({
+                    'pieces': data,
+                    'legacy': True
+                })
+            return JSONResponse(data)
     
-    return JSONResponse([])
+    return JSONResponse({'pieces': [], 'legacy': True})
 
 
 @app.get("/download/{puzzle_id}")
