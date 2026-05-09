@@ -5,9 +5,9 @@ const SCATTER_MARGIN_X = 1900;    // отступ слева и справа (б
 const SCATTER_MARGIN_Y = 900;    // отступ сверху и снизу
 
 const ZONE_VISUAL_MARGIN = 0;
-const SNAP_THRESHOLD = 70;
-const GROUP_SNAP_THRESHOLD = 60;
-const BORDER_SNAP_THRESHOLD = 60;
+const SNAP_THRESHOLD = 45;
+const GROUP_SNAP_THRESHOLD = 55;
+const BORDER_SNAP_THRESHOLD = 55;
 
 let pieces = [];
 let selectedPiece = null;
@@ -24,6 +24,13 @@ let isDraggingWrapper = false;
 let wrapperDragStart = { x: 0, y: 0 };
 let snapHighlight = null;
 let assemblyZone = { x: 0, y: 0, w: 0, h: 0 };
+
+// ======================================================
+// PARTICLE SYSTEM
+// ======================================================
+
+let snapEffects = [];   // активные эффекты вспышки/звёздочек
+let animFrameId = null; // requestAnimationFrame handle
 
 const canvas = document.getElementById('puzzleCanvas');
 const ctx = canvas.getContext('2d');
@@ -342,6 +349,186 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
 }
 
 // ======================================================
+// SNAP PARTICLE EFFECT
+// ======================================================
+
+/**
+ * Запускает эффект вспышки + звёздочек в центре кусочка.
+ * cx, cy — координаты на canvas (correctX + w/2, correctY + h/2).
+ */
+function spawnSnapEffect(cx, cy) {
+    const now = performance.now();
+
+    // ---------- ЗВЁЗДОЧКИ ----------
+    const starCount = 16;
+    const stars = [];
+
+    for (let i = 0; i < starCount; i++) {
+        const angle = (i / starCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+
+        // Скорость: случайная в диапазоне, чтобы веер был пышным
+        const speed = 180 + Math.random() * 220;
+
+        // Размер звезды
+        const size = 6 + Math.random() * 10;
+
+        // Золотистый оттенок: от ярко-жёлтого до оранжево-золотого
+        const hue = 38 + Math.random() * 22;          // 38–60 → жёлто-золотой
+        const sat = 90 + Math.random() * 10;
+        const lit = 55 + Math.random() * 20;
+
+        stars.push({
+            x: cx,
+            y: cy,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 60,  // лёгкий начальный импульс вверх
+            gravity: 320,                        // гравитация (px/s²)
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 12, // рад/с
+            size,
+            color: `hsl(${hue},${sat}%,${lit}%)`,
+            born: now,
+            life: 0.65 + Math.random() * 0.35,  // 0.65–1.0 с
+        });
+    }
+
+    snapEffects.push({
+        type: 'snap',
+        cx, cy,
+        born: now,
+        // Длительность вспышки
+        flashDuration: 0.35,   // с
+        totalLife: 1.1,        // с (дольше, чем вспышка — звёзды живут дольше)
+        stars,
+    });
+
+    // Запускаем анимационный цикл, если он ещё не идёт
+    if (!animFrameId) {
+        animFrameId = requestAnimationFrame(animateTick);
+    }
+}
+
+/** Один тик анимации: пересчитывает частицы и перерисовывает. */
+function animateTick(timestamp) {
+    draw();
+
+    // Удаляем мёртвые эффекты
+    const now = performance.now();
+    snapEffects = snapEffects.filter(e => (now - e.born) / 1000 < e.totalLife);
+
+    if (snapEffects.length > 0) {
+        animFrameId = requestAnimationFrame(animateTick);
+    } else {
+        animFrameId = null;
+    }
+}
+
+/**
+ * Рисует все активные эффекты поверх canvas.
+ * Вызывается из draw().
+ */
+function drawSnapEffects() {
+    if (snapEffects.length === 0) return;
+
+    const now = performance.now();
+
+    ctx.save();
+
+    for (const eff of snapEffects) {
+        const t = (now - eff.born) / 1000;  // секунды с момента рождения
+        if (t >= eff.totalLife) continue;
+
+        // ==========================================
+        // ВСПЫШКА — расширяющийся круг
+        // ==========================================
+        {
+            const ft = Math.min(t / eff.flashDuration, 1);  // 0→1 за flashDuration сек
+            const radius = ft * 250;                           // от 0 до 90 px
+            const alpha = (1 - ft) * 0.75;                   // затухает
+
+            // Внешнее кольцо
+            const grd = ctx.createRadialGradient(
+                eff.cx, eff.cy, radius * 0.3,
+                eff.cx, eff.cy, radius
+            );
+            grd.addColorStop(0, `rgba(255,240,160,${alpha})`);
+            grd.addColorStop(0.5, `rgba(255,200,60,${alpha * 0.6})`);
+            grd.addColorStop(1, `rgba(255,160,0,0)`);
+
+            ctx.beginPath();
+            ctx.arc(eff.cx, eff.cy, Math.max(0.1, radius), 0, Math.PI * 2);
+            ctx.fillStyle = grd;
+            ctx.fill();
+
+            // Яркое ядро
+            const coreR = Math.max(0.1, radius * 0.25 * (1 - ft));
+            const coreGrd = ctx.createRadialGradient(
+                eff.cx, eff.cy, 0,
+                eff.cx, eff.cy, coreR
+            );
+            coreGrd.addColorStop(0, `rgba(255,255,220,${alpha * 1.4})`);
+            coreGrd.addColorStop(1, `rgba(255,220,100,0)`);
+
+            ctx.beginPath();
+            ctx.arc(eff.cx, eff.cy, coreR, 0, Math.PI * 2);
+            ctx.fillStyle = coreGrd;
+            ctx.fill();
+        }
+
+        // ==========================================
+        // ЗВЁЗДОЧКИ
+        // ==========================================
+        for (const s of eff.stars) {
+            const st = (now - s.born) / 1000;
+            if (st >= s.life) continue;
+
+            const lifeRatio = st / s.life;
+            const alpha = lifeRatio < 0.15
+                ? lifeRatio / 0.15              // нарастает первые 15%
+                : 1 - (lifeRatio - 0.15) / 0.85; // затухает оставшиеся 85%
+
+            // Физика: равноускоренное падение
+            const px = s.x + s.vx * st;
+            const py = s.y + s.vy * st + 0.5 * s.gravity * st * st;
+            const rot = s.rotation + s.rotSpeed * st;
+
+            // Рисуем 5-лучевую звезду
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(rot);
+            ctx.globalAlpha = Math.max(0, alpha);
+
+            // Градиентная заливка звезды
+            const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, s.size);
+            grd.addColorStop(0, '#fffde0');
+            grd.addColorStop(0.3, s.color);
+            grd.addColorStop(1, 'rgba(255,140,0,0)');
+
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            drawStar5(ctx, 0, 0, s.size * 0.42, s.size);
+            ctx.fill();
+
+            ctx.restore();
+        }
+    }
+
+    ctx.restore();
+}
+
+/** Рисует 5-лучевую звезду. */
+function drawStar5(ctx, cx, cy, innerR, outerR) {
+    const points = 5;
+    ctx.moveTo(cx, cy - outerR);
+    for (let i = 0; i < points * 2; i++) {
+        const angle = (Math.PI / points) * i - Math.PI / 2;
+        const r = i % 2 === 0 ? outerR : innerR;
+        ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+    }
+    ctx.closePath();
+}
+
+// ======================================================
 // DRAW
 // ======================================================
 
@@ -383,6 +570,9 @@ function draw() {
         ctx.drawImage(p.img, p.x, p.y, p.w, p.h);
     });
     ctx.shadowBlur = 0;
+
+    // Поверх всего — частицы вспышки/звёздочек
+    drawSnapEffects();
 }
 
 // ======================================================
@@ -640,6 +830,9 @@ function tryCenterGroup(piece) {
 function trySnap(piece) {
     if (!piece || piece.fixed) return false;
 
+    // Запоминаем, какие кусочки уже были зафиксированы ДО снапа
+    const fixedBefore = new Set(pieces.filter(p => p.fixed));
+
     let snapped = false;
 
     if (checkBorderSnap(piece)) snapped = true;
@@ -651,6 +844,15 @@ function trySnap(piece) {
         updateProgress();
         tryCenterGroup(piece);
         draw();
+
+        // Запускаем эффект для каждого кусочка, который зафиксировался именно сейчас
+        pieces.forEach(p => {
+            if (p.fixed && !fixedBefore.has(p)) {
+                const cx = p.correctX + p.w / 2;
+                const cy = p.correctY + p.h / 2;
+                spawnSnapEffect(cx, cy);
+            }
+        });
     }
 
     return snapped;
