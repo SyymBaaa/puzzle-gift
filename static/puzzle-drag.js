@@ -151,7 +151,7 @@ function onTouchEnd(e) {
 function onWheel(e) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
-    scale = Math.min(Math.max(0.4, scale + delta), 2.0);
+    scale = Math.min(Math.max(0.05, scale + delta), 2.0);
     updateTransform();
 }
 

@@ -72,7 +72,7 @@ async function initPuzzle() {
                 img: img,
                 x: randomX,
                 y: randomY,
-                correctX: info.correct_x + 150,
+                correctX: info.correct_x + 150,   // центр кусочка в собранном виде
                 correctY: info.correct_y + 150,
                 w: info.width,
                 h: info.height,
@@ -92,7 +92,7 @@ async function initPuzzle() {
     }
 }
 
-// ========== GROUP MANAGEMENT (ИСПРАВЛЕНО) ==========
+// ========== GROUP MANAGEMENT ==========
 function getGroup(piece) {
     if (!piece.group) {
         const group = {
@@ -149,19 +149,22 @@ function centerGroupInAssemblyZone(group) {
     });
 }
 
-// ========== NEIGHBOR CHECK (ИСПРАВЛЕНО) ==========
+// ========== NEIGHBOR CHECK (исправлено для центров) ==========
 function areNeighbors(a, b) {
+    // correctX/Y — это центры кусочков
     const dx = Math.abs(a.correctX - b.correctX);
     const dy = Math.abs(a.correctY - b.correctY);
-    const tolerance = 20;
+    const tolerance = 25;
     
-    const horizontal = Math.abs(dx - a.w) < tolerance && dy < tolerance;
-    const vertical = Math.abs(dy - a.h) < tolerance && dx < tolerance;
+    // Сосед по горизонтали: центры по X отличаются на полусумму ширин, по Y — почти одинаково
+    const horizontal = Math.abs(dx - (a.w + b.w) / 2) < tolerance && dy < tolerance;
+    // Сосед по вертикали: центры по Y отличаются на полусумму высот, по X — почти одинаково
+    const vertical = Math.abs(dy - (a.h + b.h) / 2) < tolerance && dx < tolerance;
     
     return horizontal || vertical;
 }
 
-// ========== SNAP LOGIC (ИСПРАВЛЕНО) ==========
+// ========== SNAP LOGIC (улучшенная) ==========
 
 function checkBorderSnap(piece) {
     if (piece.fixed) return false;
@@ -204,20 +207,34 @@ function checkBorderSnap(piece) {
 }
 
 function checkCorrectPositionSnap(piece) {
+    const group = getGroup(piece);
+    // Если в группе есть фиксированные, нельзя сдвигать всю группу
+    const hasFixed = group.pieces.some(p => p.fixed);
+    
+    if (hasFixed) {
+        // Проверяем только сам кусочек
+        const dist = Math.hypot(piece.x - piece.correctX, piece.y - piece.correctY);
+        if (dist < 35) {
+            piece.x = piece.correctX;
+            piece.y = piece.correctY;
+            piece.fixed = true;
+            return true;
+        }
+        return false;
+    }
+    
+    // Нет фиксированных — можно сдвинуть всю группу
     const dx = piece.correctX - piece.x;
     const dy = piece.correctY - piece.y;
     const dist = Math.hypot(dx, dy);
     
     if (dist < 35) {
-        const group = getGroup(piece);
-        
         // Сдвигаем всю группу
         group.pieces.forEach(p => {
             p.x += dx;
             p.y += dy;
         });
-        
-        // Проверяем каждый пазл отдельно (только если он точно на месте)
+        // Фиксируем те, которые точно на месте
         group.pieces.forEach(p => {
             const d = Math.hypot(p.x - p.correctX, p.y - p.correctY);
             if (d < 2) {
@@ -226,7 +243,6 @@ function checkCorrectPositionSnap(piece) {
                 p.fixed = true;
             }
         });
-        
         return true;
     }
     return false;
@@ -235,38 +251,39 @@ function checkCorrectPositionSnap(piece) {
 function checkNeighborSnap(piece) {
     for (const other of pieces) {
         if (piece === other) continue;
-        
-        // Проверяем, являются ли они соседями по правильным координатам
         if (!areNeighbors(piece, other)) continue;
         
-        const dx = piece.correctX - other.correctX;
-        const dy = piece.correctY - other.correctY;
-        const targetX = other.x + dx;
-        const targetY = other.y + dy;
+        // Желаемая позиция для piece относительно other
+        const targetX = other.x + (piece.correctX - other.correctX);
+        const targetY = other.y + (piece.correctY - other.correctY);
+        const dist = Math.hypot(piece.x - targetX, piece.y - targetY);
         
-        const distToOther = Math.hypot(piece.x - targetX, piece.y - targetY);
-        
-        if (distToOther < 50) {
+        if (dist < 50) {
+            const groupA = getGroup(piece);
+            const groupB = getGroup(other);
             const mergedGroup = mergeGroups(piece, other);
             
-            const moveX = targetX - piece.x;
-            const moveY = targetY - piece.y;
-            
-            // Проверяем, есть ли в группе fixed кусочки
             const hasFixed = mergedGroup.pieces.some(p => p.fixed);
             
             if (!hasFixed) {
+                // Нет фиксированных — двигаем всю объединённую группу
+                const dx = targetX - piece.x;
+                const dy = targetY - piece.y;
                 mergedGroup.pieces.forEach(p => {
-                    p.x += moveX;
-                    p.y += moveY;
+                    p.x += dx;
+                    p.y += dy;
+                });
+            } else {
+                // Есть фиксированные — двигаем только нефиксированную часть группы piece
+                const dx = targetX - piece.x;
+                const dy = targetY - piece.y;
+                groupA.pieces.forEach(p => {
+                    if (!p.fixed) {
+                        p.x += dx;
+                        p.y += dy;
+                    }
                 });
             }
-            
-            // Центрируем группу в зоне сборки, если она новая
-            if (mergedGroup.pieces.length === 2 && !piece.fixed && !other.fixed) {
-                centerGroupInAssemblyZone(mergedGroup);
-            }
-            
             return true;
         }
     }
