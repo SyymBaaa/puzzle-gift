@@ -1,13 +1,17 @@
 const PUZZLE_ID = window.PUZZLE_ID;
 
-// ========== НАСТРОЙКИ ОТСТУПОВ (отдельно горизонталь и вертикаль) ==========
-const SCATTER_MARGIN_X = 1900;    // отступ слева и справа (больше места по бокам)
-const SCATTER_MARGIN_Y = 900;    // отступ сверху и снизу
-
+// ========== НАСТРОЙКИ ОТСТУПОВ ==========
+const SCATTER_MARGIN_X = 1900;
+const SCATTER_MARGIN_Y = 900;
 const ZONE_VISUAL_MARGIN = 0;
 const SNAP_THRESHOLD = 45;
 const GROUP_SNAP_THRESHOLD = 55;
 const BORDER_SNAP_THRESHOLD = 55;
+
+// ========== ОПТИМИЗАЦИЯ ДЛЯ МОБИЛЬНЫХ ==========
+const MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const ENABLE_SHADOWS = !MOBILE;
+const ENABLE_PULSE = true;
 
 let pieces = [];
 let selectedPiece = null;
@@ -29,8 +33,14 @@ let assemblyZone = { x: 0, y: 0, w: 0, h: 0 };
 // PARTICLE SYSTEM
 // ======================================================
 
-let snapEffects = [];   // активные эффекты вспышки/звёздочек
-let animFrameId = null; // requestAnimationFrame handle
+let snapEffects = [];
+let groupFlashEffects = [];
+let animFrameId = null;
+
+// ========== ОПТИМИЗАЦИЯ DRAG ==========
+let dragPending = false;
+let dragGroup = null;
+let dragDx = 0, dragDy = 0;
 
 const canvas = document.getElementById('puzzleCanvas');
 const ctx = canvas.getContext('2d');
@@ -110,14 +120,12 @@ function calculateAssemblyZoneFromBounds(puzzleWidth, puzzleHeight, visualMargin
 // ======================================================
 
 function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
-    const margin = 20;  // минимальное расстояние между кусочками
+    const margin = 20;
     const maxAttempts = 200;
 
-    // === ЭТАП 1: Идеальное размещение (без перекрытий) ===
     function stage1_NoOverlap(x, y, w, h, existing) {
         for (const piece of existing) {
             if (piece.fixed) continue;
-            // Проверяем, нет ли пересечения с запасом margin
             if (x < piece.x + piece.w + margin &&
                 x + w + margin > piece.x &&
                 y < piece.y + piece.h + margin &&
@@ -128,7 +136,6 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
         return true;
     }
 
-    // === ЭТАП 2: Контролируемое перекрытие (до 7%, не более 2 соседей) ===
     function getOverlapRatio(x1, y1, w1, h1, x2, y2, w2, h2) {
         const overlapX = Math.max(0, Math.min(x1 + w1, x2 + w2) - Math.max(x1, x2));
         const overlapY = Math.max(0, Math.min(y1 + h1, y2 + h2) - Math.max(y1, y2));
@@ -139,32 +146,19 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
 
     function stage2_ControlledOverlap(x, y, w, h, existing) {
         let overlappingCount = 0;
-        let maxOverlap = 0;
-
         for (const piece of existing) {
             if (piece.fixed) continue;
             const overlap = getOverlapRatio(x, y, w, h, piece.x, piece.y, piece.w, piece.h);
-
-            if (overlap > 0.01) {  // есть перекрытие
+            if (overlap > 0.01) {
                 overlappingCount++;
-                maxOverlap = Math.max(maxOverlap, overlap);
-
-                // Не более 2 соседей
-                if (overlappingCount > 2) {
-                    return false;
-                }
-                // Не более 7% перекрытия
-                if (overlap > 0.05) {
-                    return false;
-                }
+                if (overlappingCount > 2) return false;
+                if (overlap > 0.05) return false;
             }
         }
         return true;
     }
 
-    // === ЭТАП 3: Рандомное размещение (минимальные проверки) ===
-    function stage3_RandomPlacement(x, y, w, h, existing) {
-        // Только проверяем, что не внутри зоны сборки
+    function stage3_RandomPlacement(x, y, w, h) {
         const overlapsAssembly = !(
             x + w < assemblyZone.x ||
             x > assemblyZone.x + assemblyZone.w ||
@@ -174,14 +168,10 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
         return !overlapsAssembly;
     }
 
-    // Определяем зоны вокруг сборки
     const zones = [];
     const totalPieces = existingPieces.length + 1;
-
-    // Динамическое расширение зон
     const sideExpansion = Math.min(1.5, 1 + totalPieces / 100);
 
-    // Зона слева
     if (assemblyZone.x - pieceW > margin) {
         zones.push({
             xMin: margin,
@@ -192,7 +182,6 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
         });
     }
 
-    // Зона справа
     if (assemblyZone.x + assemblyZone.w + pieceW < boardW - margin) {
         zones.push({
             xMin: assemblyZone.x + assemblyZone.w - pieceW * 0.3,
@@ -203,7 +192,6 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
         });
     }
 
-    // Зона сверху
     if (assemblyZone.y - pieceH > margin) {
         zones.push({
             xMin: Math.max(margin, assemblyZone.x - pieceW * sideExpansion),
@@ -214,7 +202,6 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
         });
     }
 
-    // Зона снизу
     if (assemblyZone.y + assemblyZone.h + pieceH < boardH - margin) {
         zones.push({
             xMin: Math.max(margin, assemblyZone.x - pieceW * sideExpansion),
@@ -225,123 +212,57 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
         });
     }
 
-    // Угловые зоны
     if (assemblyZone.x - pieceW - margin > margin && assemblyZone.y - pieceH - margin > margin) {
-        zones.push({
-            xMin: margin,
-            xMax: assemblyZone.x - pieceW - margin,
-            yMin: margin,
-            yMax: assemblyZone.y - pieceH - margin,
-            priority: 3
-        });
+        zones.push({ xMin: margin, xMax: assemblyZone.x - pieceW - margin, yMin: margin, yMax: assemblyZone.y - pieceH - margin, priority: 3 });
     }
-
     if (assemblyZone.x + assemblyZone.w + pieceW + margin < boardW - margin && assemblyZone.y - pieceH - margin > margin) {
-        zones.push({
-            xMin: assemblyZone.x + assemblyZone.w + margin,
-            xMax: boardW - pieceW - margin,
-            yMin: margin,
-            yMax: assemblyZone.y - pieceH - margin,
-            priority: 3
-        });
+        zones.push({ xMin: assemblyZone.x + assemblyZone.w + margin, xMax: boardW - pieceW - margin, yMin: margin, yMax: assemblyZone.y - pieceH - margin, priority: 3 });
     }
-
     if (assemblyZone.x - pieceW - margin > margin && assemblyZone.y + assemblyZone.h + pieceH + margin < boardH - margin) {
-        zones.push({
-            xMin: margin,
-            xMax: assemblyZone.x - pieceW - margin,
-            yMin: assemblyZone.y + assemblyZone.h + margin,
-            yMax: boardH - pieceH - margin,
-            priority: 3
-        });
+        zones.push({ xMin: margin, xMax: assemblyZone.x - pieceW - margin, yMin: assemblyZone.y + assemblyZone.h + margin, yMax: boardH - pieceH - margin, priority: 3 });
     }
-
     if (assemblyZone.x + assemblyZone.w + pieceW + margin < boardW - margin && assemblyZone.y + assemblyZone.h + pieceH + margin < boardH - margin) {
-        zones.push({
-            xMin: assemblyZone.x + assemblyZone.w + margin,
-            xMax: boardW - pieceW - margin,
-            yMin: assemblyZone.y + assemblyZone.h + margin,
-            yMax: boardH - pieceH - margin,
-            priority: 3
-        });
+        zones.push({ xMin: assemblyZone.x + assemblyZone.w + margin, xMax: boardW - pieceW - margin, yMin: assemblyZone.y + assemblyZone.h + margin, yMax: boardH - pieceH - margin, priority: 3 });
     }
 
-    // ВСЕГДА добавляем глобальную зону
-    zones.push({
-        xMin: margin,
-        xMax: boardW - pieceW - margin,
-        yMin: margin,
-        yMax: boardH - pieceH - margin,
-        priority: 10
-    });
-
+    zones.push({ xMin: margin, xMax: boardW - pieceW - margin, yMin: margin, yMax: boardH - pieceH - margin, priority: 10 });
     zones.sort((a, b) => a.priority - b.priority);
 
-    // Определяем, на каком этапе мы находимся
     const piecesCount = existingPieces.length;
     let useStage = 1;
+    if (piecesCount > 20) useStage = 2;
+    if (piecesCount > 32) useStage = 3;
 
-    if (piecesCount > 20) {
-        useStage = 2;  // после 20 кусочков разрешаем перекрытия
-    }
-    if (piecesCount > 32) {
-        useStage = 3;  // после 32 кусочков - рандом
-    }
-
-    // Пробуем разместить
     for (const zone of zones) {
         if (zone.xMax < zone.xMin || zone.yMax < zone.yMin) continue;
-
         const attempts = maxAttempts + piecesCount * 3;
-
         for (let attempt = 0; attempt < attempts; attempt++) {
             let x = zone.xMin + Math.random() * (zone.xMax - zone.xMin);
             let y = zone.yMin + Math.random() * (zone.yMax - zone.yMin);
-
-            // Хаотичное смещение
-            const chaosX = (Math.random() - 0.5) * pieceW * 0.1;
-            const chaosY = (Math.random() - 0.5) * pieceH * 0.1;
-            x += chaosX;
-            y += chaosY;
-
+            x += (Math.random() - 0.5) * pieceW * 0.1;
+            y += (Math.random() - 0.5) * pieceH * 0.1;
             x = Math.max(zone.xMin, Math.min(zone.xMax, x));
             y = Math.max(zone.yMin, Math.min(zone.yMax, y));
-
             let isValid = false;
-
-            if (useStage === 1) {
-                isValid = stage1_NoOverlap(x, y, pieceW, pieceH, existingPieces);
-            } else if (useStage === 2) {
-                isValid = stage2_ControlledOverlap(x, y, pieceW, pieceH, existingPieces);
-            } else {
-                isValid = stage3_RandomPlacement(x, y, pieceW, pieceH, existingPieces);
-            }
-
-            if (isValid) {
-                return { x, y };
-            }
+            if (useStage === 1) isValid = stage1_NoOverlap(x, y, pieceW, pieceH, existingPieces);
+            else if (useStage === 2) isValid = stage2_ControlledOverlap(x, y, pieceW, pieceH, existingPieces);
+            else isValid = stage3_RandomPlacement(x, y, pieceW, pieceH);
+            if (isValid) return { x, y };
         }
     }
 
-    // Абсолютный фолбэк - последняя попытка для оставшихся кусочков
-    // Используем рандом по всему полю, игнорируя почти все проверки
     for (let attempt = 0; attempt < 100; attempt++) {
         const x = margin + Math.random() * (boardW - pieceW - margin * 2);
         const y = margin + Math.random() * (boardH - pieceH - margin * 2);
-
         const overlapsAssembly = !(
-            x + w < assemblyZone.x + pieceW * 0.5 ||
+            x + pieceW < assemblyZone.x + pieceW * 0.5 ||
             x > assemblyZone.x + assemblyZone.w - pieceW * 0.5 ||
-            y + h < assemblyZone.y + pieceH * 0.5 ||
+            y + pieceH < assemblyZone.y + pieceH * 0.5 ||
             y > assemblyZone.y + assemblyZone.h - pieceH * 0.5
         );
-
-        if (!overlapsAssembly) {
-            return { x, y };
-        }
+        if (!overlapsAssembly) return { x, y };
     }
 
-    // Самый последний вариант
     return {
         x: margin + (boardW - pieceW - margin * 2) * Math.random(),
         y: margin + (boardH - pieceH - margin * 2) * Math.random()
@@ -352,43 +273,30 @@ function getRandomPositionOutsideAssembly(pieceW, pieceH, existingPieces = []) {
 // SNAP PARTICLE EFFECT
 // ======================================================
 
-/**
- * Запускает эффект вспышки + звёздочек в центре кусочка.
- * cx, cy — координаты на canvas (correctX + w/2, correctY + h/2).
- */
 function spawnSnapEffect(cx, cy) {
     const now = performance.now();
-
-    // ---------- ЗВЁЗДОЧКИ ----------
-    const starCount = 16;
+    const starCount = MOBILE ? 8 : 16;
     const stars = [];
 
     for (let i = 0; i < starCount; i++) {
         const angle = (i / starCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-
-        // Скорость: случайная в диапазоне, чтобы веер был пышным
-        const speed = 180 + Math.random() * 220;
-
-        // Размер звезды
-        const size = 6 + Math.random() * 10;
-
-        // Золотистый оттенок: от ярко-жёлтого до оранжево-золотого
-        const hue = 38 + Math.random() * 22;          // 38–60 → жёлто-золотой
+        const speed = 360 + Math.random() * 440;
+        const size = (MOBILE ? 4 : 6) + Math.random() * (MOBILE ? 6 : 10);
+        const hue = 38 + Math.random() * 22;
         const sat = 90 + Math.random() * 10;
         const lit = 55 + Math.random() * 20;
 
         stars.push({
-            x: cx,
-            y: cy,
+            x: cx, y: cy,
             vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - 60,  // лёгкий начальный импульс вверх
-            gravity: 320,                        // гравитация (px/s²)
+            vy: Math.sin(angle) * speed - 60,
+            gravity: 320,
             rotation: Math.random() * Math.PI * 2,
-            rotSpeed: (Math.random() - 0.5) * 12, // рад/с
+            rotSpeed: (Math.random() - 0.5) * 12,
             size,
             color: `hsl(${hue},${sat}%,${lit}%)`,
             born: now,
-            life: 0.65 + Math.random() * 0.35,  // 0.65–1.0 с
+            life: 0.65 + Math.random() * 0.35,
         });
     }
 
@@ -396,127 +304,45 @@ function spawnSnapEffect(cx, cy) {
         type: 'snap',
         cx, cy,
         born: now,
-        // Длительность вспышки
-        flashDuration: 0.35,   // с
-        totalLife: 1.1,        // с (дольше, чем вспышка — звёзды живут дольше)
+        flashDuration: 0.35,
+        totalLife: 1.1,
         stars,
     });
 
-    // Запускаем анимационный цикл, если он ещё не идёт
     if (!animFrameId) {
         animFrameId = requestAnimationFrame(animateTick);
     }
 }
 
-/** Один тик анимации: пересчитывает частицы и перерисовывает. */
+// ======================================================
+// GROUP FLASH EFFECT
+// ======================================================
+
+function spawnGroupFlashEffect(piecesInGroup, duration = 1.5) {
+    if (!piecesInGroup || piecesInGroup.length === 0) return;
+    const now = performance.now();
+    groupFlashEffects.push({
+        pieceIds: piecesInGroup.map(p => p.id),
+        startTime: now,
+        duration,
+    });
+    if (!animFrameId) {
+        animFrameId = requestAnimationFrame(animateTick);
+    }
+}
+
 function animateTick(timestamp) {
     draw();
-
-    // Удаляем мёртвые эффекты
     const now = performance.now();
     snapEffects = snapEffects.filter(e => (now - e.born) / 1000 < e.totalLife);
-
-    if (snapEffects.length > 0) {
+    groupFlashEffects = groupFlashEffects.filter(e => (now - e.startTime) / 1000 < e.duration);
+    if (snapEffects.length > 0 || groupFlashEffects.length > 0) {
         animFrameId = requestAnimationFrame(animateTick);
     } else {
         animFrameId = null;
     }
 }
 
-/**
- * Рисует все активные эффекты поверх canvas.
- * Вызывается из draw().
- */
-function drawSnapEffects() {
-    if (snapEffects.length === 0) return;
-
-    const now = performance.now();
-
-    ctx.save();
-
-    for (const eff of snapEffects) {
-        const t = (now - eff.born) / 1000;  // секунды с момента рождения
-        if (t >= eff.totalLife) continue;
-
-        // ==========================================
-        // ВСПЫШКА — расширяющийся круг
-        // ==========================================
-        {
-            const ft = Math.min(t / eff.flashDuration, 1);  // 0→1 за flashDuration сек
-            const radius = ft * 250;                           // от 0 до 90 px
-            const alpha = (1 - ft) * 0.75;                   // затухает
-
-            // Внешнее кольцо
-            const grd = ctx.createRadialGradient(
-                eff.cx, eff.cy, radius * 0.3,
-                eff.cx, eff.cy, radius
-            );
-            grd.addColorStop(0, `rgba(255,240,160,${alpha})`);
-            grd.addColorStop(0.5, `rgba(255,200,60,${alpha * 0.6})`);
-            grd.addColorStop(1, `rgba(255,160,0,0)`);
-
-            ctx.beginPath();
-            ctx.arc(eff.cx, eff.cy, Math.max(0.1, radius), 0, Math.PI * 2);
-            ctx.fillStyle = grd;
-            ctx.fill();
-
-            // Яркое ядро
-            const coreR = Math.max(0.1, radius * 0.25 * (1 - ft));
-            const coreGrd = ctx.createRadialGradient(
-                eff.cx, eff.cy, 0,
-                eff.cx, eff.cy, coreR
-            );
-            coreGrd.addColorStop(0, `rgba(255,255,220,${alpha * 1.4})`);
-            coreGrd.addColorStop(1, `rgba(255,220,100,0)`);
-
-            ctx.beginPath();
-            ctx.arc(eff.cx, eff.cy, coreR, 0, Math.PI * 2);
-            ctx.fillStyle = coreGrd;
-            ctx.fill();
-        }
-
-        // ==========================================
-        // ЗВЁЗДОЧКИ
-        // ==========================================
-        for (const s of eff.stars) {
-            const st = (now - s.born) / 1000;
-            if (st >= s.life) continue;
-
-            const lifeRatio = st / s.life;
-            const alpha = lifeRatio < 0.15
-                ? lifeRatio / 0.15              // нарастает первые 15%
-                : 1 - (lifeRatio - 0.15) / 0.85; // затухает оставшиеся 85%
-
-            // Физика: равноускоренное падение
-            const px = s.x + s.vx * st;
-            const py = s.y + s.vy * st + 0.5 * s.gravity * st * st;
-            const rot = s.rotation + s.rotSpeed * st;
-
-            // Рисуем 5-лучевую звезду
-            ctx.save();
-            ctx.translate(px, py);
-            ctx.rotate(rot);
-            ctx.globalAlpha = Math.max(0, alpha);
-
-            // Градиентная заливка звезды
-            const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, s.size);
-            grd.addColorStop(0, '#fffde0');
-            grd.addColorStop(0.3, s.color);
-            grd.addColorStop(1, 'rgba(255,140,0,0)');
-
-            ctx.fillStyle = grd;
-            ctx.beginPath();
-            drawStar5(ctx, 0, 0, s.size * 0.42, s.size);
-            ctx.fill();
-
-            ctx.restore();
-        }
-    }
-
-    ctx.restore();
-}
-
-/** Рисует 5-лучевую звезду. */
 function drawStar5(ctx, cx, cy, innerR, outerR) {
     const points = 5;
     ctx.moveTo(cx, cy - outerR);
@@ -528,14 +354,70 @@ function drawStar5(ctx, cx, cy, innerR, outerR) {
     ctx.closePath();
 }
 
+function drawSnapEffects() {
+    if (snapEffects.length === 0) return;
+    const now = performance.now();
+    ctx.save();
+    for (const eff of snapEffects) {
+        const t = (now - eff.born) / 1000;
+        if (t >= eff.totalLife) continue;
+        {
+            const ft = Math.min(t / eff.flashDuration, 1);
+            const radius = ft * 180;
+            const alpha = (1 - ft) * 0.75;
+            const grd = ctx.createRadialGradient(eff.cx, eff.cy, radius * 0.3, eff.cx, eff.cy, radius);
+            grd.addColorStop(0, `rgba(255,240,160,${alpha})`);
+            grd.addColorStop(0.5, `rgba(255,200,60,${alpha * 0.6})`);
+            grd.addColorStop(1, `rgba(255,160,0,0)`);
+            ctx.beginPath();
+            ctx.arc(eff.cx, eff.cy, Math.max(0.1, radius), 0, Math.PI * 2);
+            ctx.fillStyle = grd;
+            ctx.fill();
+            const coreR = Math.max(0.1, radius * 0.25 * (1 - ft));
+            const coreGrd = ctx.createRadialGradient(eff.cx, eff.cy, 0, eff.cx, eff.cy, coreR);
+            coreGrd.addColorStop(0, `rgba(255,255,220,${alpha * 1.4})`);
+            coreGrd.addColorStop(1, `rgba(255,220,100,0)`);
+            ctx.beginPath();
+            ctx.arc(eff.cx, eff.cy, coreR, 0, Math.PI * 2);
+            ctx.fillStyle = coreGrd;
+            ctx.fill();
+        }
+        for (const s of eff.stars) {
+            const st = (now - s.born) / 1000;
+            if (st >= s.life) continue;
+            const lifeRatio = st / s.life;
+            const alpha = lifeRatio < 0.15 ? lifeRatio / 0.15 : 1 - (lifeRatio - 0.15) / 0.85;
+            const px = s.x + s.vx * st;
+            const py = s.y + s.vy * st + 0.5 * s.gravity * st * st;
+            const rot = s.rotation + s.rotSpeed * st;
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(rot);
+            ctx.globalAlpha = Math.max(0, alpha);
+            const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, s.size);
+            grd.addColorStop(0, '#fffde0');
+            grd.addColorStop(0.3, s.color);
+            grd.addColorStop(1, 'rgba(255,140,0,0)');
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            drawStar5(ctx, 0, 0, s.size * 0.42, s.size);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+    ctx.restore();
+}
+
 // ======================================================
 // DRAW
 // ======================================================
 
 function drawAssemblyZone() {
     ctx.save();
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    if (ENABLE_SHADOWS) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "rgba(0,0,0,0.5)";
+    }
     const gradient = ctx.createLinearGradient(
         assemblyZone.x, assemblyZone.y,
         assemblyZone.x + assemblyZone.w, assemblyZone.y + assemblyZone.h
@@ -546,7 +428,7 @@ function drawAssemblyZone() {
     ctx.fillRect(assemblyZone.x, assemblyZone.y, assemblyZone.w, assemblyZone.h);
     ctx.shadowBlur = 0;
     ctx.strokeStyle = "#d4af5a";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = MOBILE ? 2 : 3;
     ctx.strokeRect(assemblyZone.x, assemblyZone.y, assemblyZone.w, assemblyZone.h);
     ctx.restore();
 }
@@ -556,22 +438,64 @@ function draw() {
     ctx.fillStyle = "#1a2418";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     drawAssemblyZone();
-    pieces.forEach(p => {
-        if (selectedPiece && getGroup(selectedPiece) === getGroup(p)) {
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = "rgba(255,215,0,0.7)";
-        } else if (p.fixed) {
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = "rgba(76,175,80,0.5)";
-        } else {
-            ctx.shadowBlur = 4;
-            ctx.shadowColor = "rgba(0,0,0,0.35)";
-        }
-        ctx.drawImage(p.img, p.x, p.y, p.w, p.h);
-    });
-    ctx.shadowBlur = 0;
 
-    // Поверх всего — частицы вспышки/звёздочек
+    // Вычисляем интенсивность пульсации для каждого кусочка
+    const flashIntensityMap = new Map();
+    if (groupFlashEffects.length > 0 && ENABLE_PULSE) {
+        const now = performance.now();
+        for (const eff of groupFlashEffects) {
+            const elapsed = (now - eff.startTime) / 1000;
+            if (elapsed >= eff.duration) continue;
+            const decay = 1 - Math.pow(elapsed / eff.duration, 1.5);
+            const frequency = 0.8 * Math.PI * 2;
+            let intensity = (Math.sin(elapsed * frequency) + 1) / 2;
+            intensity = intensity * decay * 0.45;
+            for (const pieceId of eff.pieceIds) {
+                const existing = flashIntensityMap.get(pieceId);
+                if (existing === undefined || intensity > existing) {
+                    flashIntensityMap.set(pieceId, intensity);
+                }
+            }
+        }
+    }
+
+    if (!wrapper.style.willChange) {
+        wrapper.style.willChange = 'transform';
+    }
+
+    for (const p of pieces) {
+        if (ENABLE_SHADOWS) {
+            if (selectedPiece && getGroup(selectedPiece) === getGroup(p)) {
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = "rgba(255,215,0,0.7)";
+            } else if (p.fixed) {
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = "rgba(76,175,80,0.5)";
+            } else {
+                ctx.shadowBlur = 4;
+                ctx.shadowColor = "rgba(0,0,0,0.35)";
+            }
+        }
+
+        const flashIntensity = flashIntensityMap.get(p.id) || 0;
+
+        if (flashIntensity > 0.02 && ENABLE_PULSE) {
+            // OffscreenCanvas + source-atop:
+            // накладываем золотой цвет ТОЛЬКО по непрозрачным пикселям (форме пазла).
+            // Прозрачные края кусочка остаются нетронутыми — прямоугольная рамка не светится.
+            const oc = new OffscreenCanvas(p.w, p.h);
+            const octx = oc.getContext('2d');
+            octx.drawImage(p.img, 0, 0, p.w, p.h);         // 1. Рисуем фигурный пазл
+            octx.globalCompositeOperation = 'source-atop';  // 2. Следующий рендер — только по форме
+            octx.fillStyle = `rgba(255, 220, 100, ${flashIntensity * 0.55})`;
+            octx.fillRect(0, 0, p.w, p.h);                  // 3. Накладываем золотой цвет
+            ctx.drawImage(oc, p.x, p.y, p.w, p.h);         // 4. Выводим результат
+        } else {
+            ctx.drawImage(p.img, p.x, p.y, p.w, p.h);
+        }
+    }
+
+    ctx.shadowBlur = 0;
     drawSnapEffects();
 }
 
@@ -580,12 +504,11 @@ function draw() {
 // ======================================================
 
 function updateTransform() {
-    wrapper.style.transform =
-        `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
+    wrapper.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${scale})`;
 }
 
 function resetView() {
-    scale = 0.25;
+    scale = MOBILE ? 0.2 : 0.25;
     panX = 0;
     panY = 0;
     updateTransform();
@@ -608,6 +531,8 @@ function mergeGroups(a, b) {
     if (groupA === groupB) return groupA;
     const merged = { pieces: [...groupA.pieces, ...groupB.pieces] };
     merged.pieces.forEach(p => { p.group = merged; });
+    // Запускаем пульсацию для всей объединённой группы
+    setTimeout(() => spawnGroupFlashEffect(merged.pieces, 1.0), 10);
     return merged;
 }
 
@@ -650,67 +575,44 @@ function centerGroupInAssemblyZone(group) {
 // ======================================================
 
 function areNeighbors(a, b) {
-    // Вычисляем центры кусочков в правильных координатах
     const aCenterX = a.correctX + a.bboxW / 2;
     const aCenterY = a.correctY + a.bboxH / 2;
-
     const bCenterX = b.correctX + b.bboxW / 2;
     const bCenterY = b.correctY + b.bboxH / 2;
-
-    // Расстояние между центрами
     const dx = Math.abs(aCenterX - bCenterX);
     const dy = Math.abs(aCenterY - bCenterY);
-
-    // Средний размер кусочков
     const avgW = (a.bboxW + b.bboxW) / 2;
     const avgH = (a.bboxH + b.bboxH) / 2;
-
-    // Кусочки считаются соседями, если расстояние между центрами
-    // меньше среднего размера (то есть они рядом)
     const areAdjacent = (dx < avgW * 1.2) && (dy < avgH * 1.2);
-
-    // Не должны быть одним кусочком
     const isSame = a.id === b.id;
-
     return areAdjacent && !isSame;
 }
+
 // ======================================================
-// BORDER SNAP (притягивание к границам зоны сборки)
+// BORDER SNAP
 // ======================================================
 
 function checkBorderSnap(piece) {
     if (piece.fixed) return false;
-
     let snapped = false;
     let newX = piece.x;
     let newY = piece.y;
-
     if (Math.abs(piece.x - assemblyZone.x) < BORDER_SNAP_THRESHOLD) {
-        newX = assemblyZone.x;
-        snapped = true;
+        newX = assemblyZone.x; snapped = true;
     } else if (Math.abs(piece.x + piece.w - (assemblyZone.x + assemblyZone.w)) < BORDER_SNAP_THRESHOLD) {
-        newX = assemblyZone.x + assemblyZone.w - piece.w;
-        snapped = true;
+        newX = assemblyZone.x + assemblyZone.w - piece.w; snapped = true;
     }
-
     if (Math.abs(piece.y - assemblyZone.y) < BORDER_SNAP_THRESHOLD) {
-        newY = assemblyZone.y;
-        snapped = true;
+        newY = assemblyZone.y; snapped = true;
     } else if (Math.abs(piece.y + piece.h - (assemblyZone.y + assemblyZone.h)) < BORDER_SNAP_THRESHOLD) {
-        newY = assemblyZone.y + assemblyZone.h - piece.h;
-        snapped = true;
+        newY = assemblyZone.y + assemblyZone.h - piece.h; snapped = true;
     }
-
     if (snapped) {
         const group = getGroup(piece);
         const dx = newX - piece.x;
         const dy = newY - piece.y;
-
         group.pieces.forEach(p => {
-            if (!p.fixed) {
-                p.x += dx;
-                p.y += dy;
-            }
+            if (!p.fixed) { p.x += dx; p.y += dy; }
         });
         return true;
     }
@@ -724,7 +626,6 @@ function checkBorderSnap(piece) {
 function checkCorrectPositionSnap(piece) {
     const group = getGroup(piece);
     const hasFixed = group.pieces.some(p => p.fixed);
-
     if (hasFixed) {
         const dist = Math.hypot(piece.x - piece.correctX, piece.y - piece.correctY);
         if (dist < 25) {
@@ -735,23 +636,16 @@ function checkCorrectPositionSnap(piece) {
         }
         return false;
     }
-
     const dx = piece.correctX - piece.x;
     const dy = piece.correctY - piece.y;
     const dist = Math.hypot(dx, dy);
-
     if (dist < SNAP_THRESHOLD) {
         group.pieces.forEach(p => {
-            if (!p.fixed) {
-                p.x += dx;
-                p.y += dy;
-            }
+            if (!p.fixed) { p.x += dx; p.y += dy; }
         });
         group.pieces.forEach(p => {
             if (Math.hypot(p.correctX - p.x, p.correctY - p.y) < 3) {
-                p.x = p.correctX;
-                p.y = p.correctY;
-                p.fixed = true;
+                p.x = p.correctX; p.y = p.correctY; p.fixed = true;
             }
         });
         return true;
@@ -761,42 +655,28 @@ function checkCorrectPositionSnap(piece) {
 
 function checkNeighborSnap(piece) {
     const myGroup = getGroup(piece);
-
     for (const other of pieces) {
         if (piece === other) continue;
         if (getGroup(other) === myGroup) continue;
         if (!areNeighbors(piece, other)) continue;
-
         const targetX = other.x + (piece.correctX - other.correctX);
         const targetY = other.y + (piece.correctY - other.correctY);
-
         const dist = Math.hypot(targetX - piece.x, targetY - piece.y);
-
         if (dist < GROUP_SNAP_THRESHOLD) {
             const dx = targetX - piece.x;
             const dy = targetY - piece.y;
-
             myGroup.pieces.forEach(p => {
-                if (!p.fixed) {
-                    p.x += dx;
-                    p.y += dy;
-                }
+                if (!p.fixed) { p.x += dx; p.y += dy; }
             });
-
             const mergedGroup = mergeGroups(piece, other);
-
             mergedGroup.pieces.forEach(p => {
                 if (Math.hypot(p.correctX - p.x, p.correctY - p.y) < 3) {
-                    p.x = p.correctX;
-                    p.y = p.correctY;
-                    p.fixed = true;
+                    p.x = p.correctX; p.y = p.correctY; p.fixed = true;
                 }
             });
-
             return true;
         }
     }
-
     return false;
 }
 
@@ -816,9 +696,7 @@ function tryCenterGroup(piece) {
                     break;
                 }
             }
-            if (!allInside) {
-                centerGroupInAssemblyZone(group);
-            }
+            if (!allInside) centerGroupInAssemblyZone(group);
         }
     }
 }
@@ -829,23 +707,16 @@ function tryCenterGroup(piece) {
 
 function trySnap(piece) {
     if (!piece || piece.fixed) return false;
-
-    // Запоминаем, какие кусочки уже были зафиксированы ДО снапа
     const fixedBefore = new Set(pieces.filter(p => p.fixed));
-
     let snapped = false;
-
     if (checkBorderSnap(piece)) snapped = true;
     if (checkCorrectPositionSnap(piece)) snapped = true;
     if (checkNeighborSnap(piece)) snapped = true;
-
     if (snapped) {
         draw();
         updateProgress();
         tryCenterGroup(piece);
         draw();
-
-        // Запускаем эффект для каждого кусочка, который зафиксировался именно сейчас
         pieces.forEach(p => {
             if (p.fixed && !fixedBefore.has(p)) {
                 const cx = p.correctX + p.w / 2;
@@ -853,8 +724,9 @@ function trySnap(piece) {
                 spawnSnapEffect(cx, cy);
             }
         });
+        // Вибрация на мобиле при фиксации
+        if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
     }
-
     return snapped;
 }
 
@@ -876,13 +748,8 @@ function checkWin() {
         setTimeout(() => {
             winOverlay.classList.remove("hidden");
             winOverlay.classList.add("active");
-
-            // Запускаем видео
             const video = document.getElementById('winVideo');
-            if (video) {
-                video.play().catch(e => console.log('Видео не запустилось:', e));
-            }
-
+            if (video) video.play().catch(e => console.log('Видео не запустилось:', e));
             if (audio && audioEnabled) audio.pause();
         }, 500);
     }
@@ -906,60 +773,34 @@ async function initPuzzle() {
         const puzzleData = await loadPiecesInfo();
         const piecesInfo = puzzleData.pieces;
         const isLegacy = puzzleData.legacy || !puzzleData.puzzle_width;
-
         if (piecesInfo.length === 0) throw new Error('Нет кусочков');
-
         if (!isLegacy) {
-            // НОВАЯ ЛОГИКА - используем раздельные отступы SCATTER_MARGIN_X и SCATTER_MARGIN_Y
             boardW = Math.max(800, puzzleData.puzzle_width + SCATTER_MARGIN_X * 2);
             boardH = Math.max(600, puzzleData.puzzle_height + SCATTER_MARGIN_Y * 2);
             canvas.width = boardW;
             canvas.height = boardH;
-
-            const zone = calculateAssemblyZoneFromBounds(
-                puzzleData.puzzle_width, puzzleData.puzzle_height, ZONE_VISUAL_MARGIN
-            );
+            const zone = calculateAssemblyZoneFromBounds(puzzleData.puzzle_width, puzzleData.puzzle_height, ZONE_VISUAL_MARGIN);
             assemblyZone = { x: zone.x, y: zone.y, w: zone.w, h: zone.h };
-
             const shiftX = zone.offsetX - puzzleData.puzzle_min_x;
             const shiftY = zone.offsetY - puzzleData.puzzle_min_y;
-
-            // Временный массив для уже размещённых кусочков
             const placedPieces = [];
-
             for (const info of piecesInfo) {
                 const img = await loadPieceImage(info.id);
-
-                // Размещаем кусочек с учётом уже размещённых
                 const randomPos = getRandomPositionOutsideAssembly(info.width, info.height, placedPieces);
-
-                const correctX = info.correct_x + shiftX;
-                const correctY = info.correct_y + shiftY;
-
                 const piece = {
-                    id: info.id,
-                    img,
-                    x: randomPos.x,
-                    y: randomPos.y,
-                    correctX,
-                    correctY,
-                    w: info.width,
-                    h: info.height,
-                    bboxX: info.bbox_x + shiftX,
-                    bboxY: info.bbox_y + shiftY,
-                    bboxW: info.bbox_w,
-                    bboxH: info.bbox_h,
-                    fixed: false,
-                    group: null
+                    id: info.id, img,
+                    x: randomPos.x, y: randomPos.y,
+                    correctX: info.correct_x + shiftX,
+                    correctY: info.correct_y + shiftY,
+                    w: info.width, h: info.height,
+                    bboxX: info.bbox_x + shiftX, bboxY: info.bbox_y + shiftY,
+                    bboxW: info.bbox_w, bboxH: info.bbox_h,
+                    fixed: false, group: null
                 };
-
                 placedPieces.push(piece);
             }
-
             pieces = placedPieces;
-
         } else {
-            // LEGACY режим
             let maxDim = 0;
             piecesInfo.forEach(p => { maxDim = Math.max(maxDim, p.width, p.height); });
             const cols = Math.ceil(Math.sqrt(piecesInfo.length));
@@ -969,40 +810,28 @@ async function initPuzzle() {
             canvas.width = boardW;
             canvas.height = boardH;
             calculateLegacyAssemblyZone();
-
             const placedPieces = [];
-
             for (const info of piecesInfo) {
                 const img = await loadPieceImage(info.id);
                 const randomPos = getRandomPositionOutsideAssembly(info.width, info.height, placedPieces);
-
                 const piece = {
-                    id: info.id,
-                    img,
-                    x: randomPos.x,
-                    y: randomPos.y,
-                    correctX: info.correct_x,
-                    correctY: info.correct_y,
-                    w: info.width,
-                    h: info.height,
-                    bboxX: info.correct_x,
-                    bboxY: info.correct_y,
-                    bboxW: info.width,
-                    bboxH: info.height,
-                    fixed: false,
-                    group: null
+                    id: info.id, img,
+                    x: randomPos.x, y: randomPos.y,
+                    correctX: info.correct_x, correctY: info.correct_y,
+                    w: info.width, h: info.height,
+                    bboxX: info.correct_x, bboxY: info.correct_y,
+                    bboxW: info.width, bboxH: info.height,
+                    fixed: false, group: null
                 };
-
                 placedPieces.push(piece);
             }
-
             pieces = placedPieces;
         }
-
+        groupFlashEffects = [];
+        snapEffects = [];
         updateProgress();
         draw();
         resetView();
-
     } catch (err) {
         console.error(err);
         alert("Ошибка загрузки пазла");
